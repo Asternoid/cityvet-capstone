@@ -1,17 +1,17 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import errorHandler from './src/middleware/errorHandler.js';
+import { errorHandler } from './middleware/errorHandler.js';
 
 // Route imports
-import authRoutes from './src/routes/auth.routes.js';
-import clientRoutes from './src/routes/client.routes.js';
-import appointmentRoutes from './src/routes/appointment.routes.js';
-import technicianRoutes from './src/routes/technician.routes.js';
-import adminRoutes from './src/routes/admin.routes.js';
-import feedbackRoutes from './src/routes/feedback.routes.js';
-import notificationRoutes from './src/routes/notification.routes.js';
-import reportRoutes from './src/routes/report.routes.js';
+import authRoutes from './routes/auth.routes.js';
+import clientRoutes from './routes/client.routes.js';
+import appointmentRoutes from './routes/appointment.routes.js';
+import technicianRoutes from './routes/technician.routes.js';
+import adminRoutes from './routes/admin.routes.js';
+import feedbackRoutes from './routes/feedback.routes.js';
+import notificationRoutes from './routes/notification.routes.js';
+import reportRoutes from './routes/report.routes.js';
 
 const app = express();
 
