@@ -103,3 +103,137 @@ export const updateAppointmentStatus = async (req, res, next) => {
     next(err);
   }
 };
+
+// POST /api/appointments/:id/cancel
+export const cancelAppointment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const userId = req.user.id;
+
+    const { data: appointment, error: fetchErr } = await supabaseAdmin
+      .from('appointments')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !appointment) return res.status(404).json({ success: false, error: 'Appointment not found.' });
+
+    if (['completed', 'cancelled', 'no_show'].includes(appointment.status)) {
+      return res.status(400).json({ success: false, error: 'Cannot cancel an appointment in its current state.' });
+    }
+
+    const { data: updated, error: updateErr } = await supabaseAdmin
+      .from('appointments')
+      .update({ status: 'cancelled', cancellation_reason: reason || null })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    await supabaseAdmin.from('appointment_status_logs').insert([{
+      appointment_id: id,
+      old_status: appointment.status,
+      new_status: 'cancelled',
+      changed_by: userId,
+      notes: reason || 'Cancelled by client'
+    }]);
+
+    // Notify technician if assigned
+    if (appointment.technician_id) {
+      await sendInAppNotification(
+        appointment.technician_id,
+        'Appointment Cancelled',
+        `Appointment ${appointment.reference_no} has been cancelled by the client.`,
+        'appointment',
+        id
+      );
+    }
+
+    // Notify client
+    await sendInAppNotification(
+      userId,
+      'Cancellation Confirmed',
+      `Your appointment ${appointment.reference_no} has been cancelled.`,
+      'appointment',
+      id
+    );
+
+    res.status(200).json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// POST /api/appointments/:id/reschedule
+export const rescheduleAppointment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { newDate, newTime } = req.body;
+    const userId = req.user.id;
+
+    if (!newDate || !newTime) return res.status(400).json({ success: false, error: 'newDate and newTime are required.' });
+
+    const { data: appointment, error: fetchErr } = await supabaseAdmin
+      .from('appointments')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (fetchErr || !appointment) return res.status(404).json({ success: false, error: 'Appointment not found.' });
+
+    if (['completed', 'cancelled', 'no_show'].includes(appointment.status)) {
+      return res.status(400).json({ success: false, error: 'Cannot reschedule an appointment in its current state.' });
+    }
+
+    // Update appointment to pending and clear current technician assignment for re-routing
+    const { data: updated, error: updateErr } = await supabaseAdmin
+      .from('appointments')
+      .update({
+        preferred_date: newDate,
+        preferred_time: newTime,
+        technician_id: null,
+        estimated_service_date: null,
+        status: 'pending_technician_confirmation'
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (updateErr) throw updateErr;
+
+    await supabaseAdmin.from('appointment_status_logs').insert([{
+      appointment_id: id,
+      old_status: appointment.status,
+      new_status: 'pending_technician_confirmation',
+      changed_by: userId,
+      notes: `Reschedule requested to ${newDate} ${newTime}`
+    }]);
+
+    // Notify client
+    await sendInAppNotification(
+      userId,
+      'Reschedule Received',
+      `Your reschedule request for ${appointment.reference_no} to ${newDate} ${newTime} is pending assignment.`,
+      'appointment',
+      id
+    );
+
+    // Notify Admins (simple broadcast placeholder)
+    // In a production system we'd target admin users; here we insert a system notification without a recipient as a placeholder
+    await supabaseAdmin.from('notifications').insert([
+      {
+        recipient_id: null,
+        title: 'Reschedule Requested',
+        message: `Reschedule requested for ${appointment.reference_no} to ${newDate} ${newTime}`,
+        type: 'appointment',
+        related_appointment_id: id
+      }
+    ]);
+
+    res.status(200).json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+};
