@@ -1,8 +1,10 @@
 import { supabaseAdmin } from '../config/supabase.js';
 
-export const runAutoAssignment = async ({ clientId, serviceId, barangayId, preferredDate, preferredTime, animalDescription }) => {
+export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, serviceId, barangayId, preferredDate, preferredTime, animalDescription }) => {
+  const supabase = supabaseClient;
+
   // 1. Fetch Service Details
-  const { data: service, error: serviceErr } = await supabaseAdmin
+  const { data: service, error: serviceErr } = await supabase
     .from('services')
     .select('*')
     .eq('id', serviceId)
@@ -12,73 +14,82 @@ export const runAutoAssignment = async ({ clientId, serviceId, barangayId, prefe
 
   const isUrgent = service.urgency_type === 'urgent';
 
-  // 2. Step 1: Barangay Technician Lookup
-  const { data: maps, error: mapErr } = await supabaseAdmin
+  // 2. Step 1: Barangay Technician Lookup — fetch all mapped technicians (primary first)
+  const { data: maps, error: mapErr } = await supabase
     .from('barangay_technician_map')
-    .select('technician_id, technician_profiles(*)')
+    .select('technician_id, is_primary')
     .eq('barangay_id', barangayId)
-    .eq('is_primary', true);
+    .order('is_primary', { ascending: false });
 
-  let candidateTechId = maps && maps.length > 0 ? maps[0].technician_id : null;
+  const candidateList = (maps || []).map(m => m.technician_id);
 
   // 3. Step 2 & 3: Handle Urgent vs Routine
   let assignedTechId = null;
   let estimatedDate = preferredDate;
   let initialStatus = 'pending_technician_confirmation';
 
-  if (isUrgent) {
-    // Urgent bypassing: route to assigned barangay tech or raise exception if no tech mapped
-    if (candidateTechId) {
-      assignedTechId = candidateTechId;
-    } else {
-      initialStatus = 'reassignment_needed'; // Flag for Admin manual assignment
-    }
-  } else {
-    // Routine Workflow: Check Leave & Capacity
-    if (!candidateTechId) {
-      initialStatus = 'reassignment_needed';
-    } else {
-      let targetDate = new Date(preferredDate);
-      let foundSlot = false;
+  // helper: check a single candidate for up to 3-day roll-forward
+  const tryCandidate = async (candidateId) => {
+    let target = new Date(preferredDate);
+    for (let dayOffset = 0; dayOffset <= 3; dayOffset++) {
+      const currentDateStr = target.toISOString().slice(0, 10);
 
-      // Roll forward check (up to 3 days)
-      for (let dayOffset = 0; dayOffset <= 3; dayOffset++) {
-        const currentDateStr = targetDate.toISOString().split('T')[0];
+      // Availability (leave) — confirm no confirmed leave that covers this date
+      const { data: leaves } = await supabase
+        .from('leave_requests')
+        .select('id')
+        .eq('technician_id', candidateId)
+        .eq('status', 'confirmed')
+        .lte('start_date', currentDateStr)
+        .gte('end_date', currentDateStr);
 
-        // Step 3: Availability (Check Leave)
-        const { data: leaves } = await supabaseAdmin
-          .from('leave_requests')
-          .select('*')
-          .eq('technician_id', candidateTechId)
-          .eq('status', 'confirmed')
-          .lte('start_date', currentDateStr)
-          .gte('end_date', currentDateStr);
-
-        if (leaves && leaves.length > 0) {
-          targetDate.setDate(targetDate.getDate() + 1);
-          continue; // On leave, try next day
-        }
-
-        // Step 4: Capacity Check (Max 6 appointments/day)
-        const { count } = await supabaseAdmin
-          .from('appointments')
-          .select('id', { count: 'exact', head: true })
-          .eq('technician_id', candidateTechId)
-          .eq('preferred_date', currentDateStr)
-          .not('status', 'in', '("cancelled","no_show")');
-
-        if ((count || 0) < 6) {
-          assignedTechId = candidateTechId;
-          estimatedDate = currentDateStr;
-          foundSlot = true;
-          break;
-        }
-
-        targetDate.setDate(targetDate.getDate() + 1);
+      if (leaves && leaves.length > 0) {
+        target.setDate(target.getDate() + 1);
+        continue; // try next day
       }
 
-      if (!foundSlot) {
-        // Exceeded capacity limit: Exception Type 2
+      // Capacity check
+      const { count } = await supabase
+        .from('appointments')
+        .select('id', { count: 'exact', head: true })
+        .eq('technician_id', candidateId)
+        .eq('preferred_date', currentDateStr)
+        .not('status', 'in', '("cancelled","no_show")');
+
+      if ((count || 0) < 6) {
+        return currentDateStr;
+      }
+
+      target.setDate(target.getDate() + 1);
+    }
+
+    return null;
+  };
+
+  if (isUrgent) {
+    // Urgent: try primary mapped tech(s) and set estimated_date to today
+    if (candidateList.length > 0) {
+      assignedTechId = candidateList[0];
+      estimatedDate = new Date().toISOString().slice(0, 10);
+    } else {
+      initialStatus = 'reassignment_needed';
+    }
+  } else {
+    if (!candidateList || candidateList.length === 0) {
+      initialStatus = 'reassignment_needed';
+    } else {
+      let found = false;
+      for (const cand of candidateList) {
+        const availableDate = await tryCandidate(cand);
+        if (availableDate) {
+          assignedTechId = cand;
+          estimatedDate = availableDate;
+          found = true;
+          break;
+        }
+      }
+
+      if (!found) {
         initialStatus = 'reassignment_needed';
       }
     }
@@ -88,7 +99,7 @@ export const runAutoAssignment = async ({ clientId, serviceId, barangayId, prefe
   const referenceNo = `APT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
   // 5. Insert Appointment
-  const { data: newAppointment, error: insertErr } = await supabaseAdmin
+  const { data: newAppointment, error: insertErr } = await supabase
     .from('appointments')
     .insert([{
       reference_no: referenceNo,
@@ -109,13 +120,24 @@ export const runAutoAssignment = async ({ clientId, serviceId, barangayId, prefe
   if (insertErr) throw new Error(insertErr.message);
 
   // 6. Log Initial Status Entry
-  await supabaseAdmin.from('appointment_status_logs').insert([{
-    appointment_id: newAppointment.id,
-    old_status: 'created',
-    new_status: initialStatus,
-    changed_by: clientId,
-    notes: isUrgent ? 'Urgent dispatch' : 'Auto-assigned via ALG-SYS1'
-  }]);
+  try {
+    await supabase.from('appointment_status_logs').insert([
+      {
+        appointment_id: newAppointment.id,
+        old_status: 'created',
+        new_status: initialStatus,
+        changed_by: clientId,
+        notes: isUrgent ? 'Urgent dispatch' : 'Auto-assigned via ALG-SYS1'
+      }
+    ]);
+  } catch (logErr) {
+    console.error('Failed to write appointment_status_logs:', logErr.message || logErr);
+  }
 
   return newAppointment;
 };
+
+// Backwards-compatible default export using the real admin client
+export const runAutoAssignment = async (params) => runAutoAssignmentWithClient(supabaseAdmin, params);
+
+export default runAutoAssignment;

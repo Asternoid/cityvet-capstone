@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "main": "src/app.js",
+  "scripts": {
+    "test": "node tests/test_nlp.js && node tests/test_autoAssignment.js"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.0.0",
     "cors": "^2.8.5",

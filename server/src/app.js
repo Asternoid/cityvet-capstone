@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import { errorHandler } from './middleware/errorHandler.js';
+import errorHandler from './middleware/errorHandler.js';
 
 // Route imports
 import authRoutes from './routes/auth.routes.js';

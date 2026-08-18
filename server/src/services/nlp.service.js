@@ -12,38 +12,44 @@ export const analyzeFeedbackNLP = async (feedbackText) => {
       return { sentiment: 'neutral', themes: ['general'] };
     }
 
-    // Call 1: Sentiment Analysis
-    const sentimentResponse = await openai.chat.completions.create({
+    // Single structured call to reduce cost: return a strict JSON object
+    const prompt = `Analyze the following veterinary service feedback. Return ONLY a JSON object with two keys: "sentiment" and "themes".
+"sentiment" must be exactly one of: positive, neutral, negative.
+"themes" must be a JSON array with up to 3 short keyword phrases (strings). Do NOT output any additional text, explanation, or markdown.
+Feedback: ${JSON.stringify(feedbackText)}`;
+
+    const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
-      messages: [{
-        role: 'user',
-        content: `Classify the sentiment of this veterinary service feedback as exactly one word: positive, neutral, or negative. Feedback in English, Tagalog, or Bisaya: "${feedbackText}"`
-      }],
-      temperature: 0.1
+      messages: [
+        { role: 'system', content: 'You are a concise JSON-only extractor.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.0,
+      max_tokens: 150
     });
 
-    const sentiment = sentimentResponse.choices[0].message.content.trim().toLowerCase();
-
-    // Call 2: Theme Extraction
-    const themeResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{
-        role: 'user',
-        content: `Extract up to 3 short thematic keywords from this feedback (e.g., "technician punctuality", "service quality"). Return ONLY a JSON array of strings: "${feedbackText}"`
-      }],
-      temperature: 0.2
-    });
-
-    let themes = [];
+    const raw = response.choices?.[0]?.message?.content?.trim() || '';
+    let parsed = null;
     try {
-      themes = JSON.parse(themeResponse.choices[0].message.content.trim());
-    } catch {
-      themes = ['general service'];
+      parsed = JSON.parse(raw);
+    } catch (err) {
+      // Try to recover by extracting the first JSON block
+      const jsonMatch = raw.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { parsed = JSON.parse(jsonMatch[0]); } catch {};
+      }
     }
+
+    if (!parsed || !parsed.sentiment) {
+      return { sentiment: 'neutral', themes: ['general'] };
+    }
+
+    const sentiment = String(parsed.sentiment).toLowerCase();
+    const themes = Array.isArray(parsed.themes) ? parsed.themes.slice(0, 3) : ['general'];
 
     return { sentiment, themes };
   } catch (err) {
-    console.error('NLP Analysis failed:', err.message);
+    console.error('NLP Analysis failed:', err?.message || err);
     return { sentiment: 'neutral', themes: ['service review'] };
   }
 };
