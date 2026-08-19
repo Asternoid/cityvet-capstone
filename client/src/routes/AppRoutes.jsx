@@ -15,6 +15,11 @@ import Landing from '../pages/public/Landing';
 import Login from '../pages/public/Login';
 import Register from '../pages/public/Register';
 import BookingPage from '../pages/client/BookingPage';
+import BookAppointment from '../pages/client/BookAppointment';
+import MyAppointments from '../pages/client/MyAppointments';
+import AppointmentStatus from '../pages/client/AppointmentStatus';
+import SubmitFeedback from '../pages/client/SubmitFeedback';
+import Notifications from '../pages/client/Notifications';
 
 const portalConfig = {
   client: {
@@ -689,6 +694,7 @@ function PortalPage({ portal, section }) {
   const { loading: apptsLoading } = useAppointments();
   const actualPortal = user ? getPortalForRole(user.role) : null;
   const activeMenu = portalConfig[portal].menu;
+  const displayName = user?.full_name || user?.name || user?.email?.split('@')[0] || 'Client';
 
   if (authLoading) return <LoadingSpinner label="Loading your portal..." />;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
@@ -734,6 +740,7 @@ function PortalPage({ portal, section }) {
             subtitle="Office of the City Veterinarian"
             tabs={portalTabs.map((key) => portalConfig[key].label)}
             activeTab={portalConfig[portal].label}
+            userName={displayName}
           />
           <div className="mt-6 grid gap-6 lg:grid-cols-[220px_1fr]">
             <Sidebar
@@ -757,8 +764,11 @@ export default function AppRoutes() {
       <Route path="/register" element={<PublicPage page="register" />} />
       <Route path="/client/dashboard" element={<PortalPage portal="client" section="Dashboard" />} />
       <Route path="/client/book" element={<PortalPage portal="client" section="Book" />} />
+      <Route path="/client/book-appointment" element={<BookAppointment />} />
       <Route path="/client/appointments" element={<PortalPage portal="client" section="Appointments" />} />
-      <Route path="/client/notifications" element={<PortalPage portal="client" section="Notifications" />} />
+      <Route path="/client/appointments/:id" element={<AppointmentStatus />} />
+      <Route path="/client/feedback" element={<SubmitFeedback />} />
+      <Route path="/client/notifications" element={<Notifications />} />
       <Route path="/technician/dashboard" element={<PortalPage portal="technician" section="Dashboard" />} />
       <Route path="/technician/schedule" element={<PortalPage portal="technician" section="Schedule" />} />
       <Route path="/technician/leave" element={<PortalPage portal="technician" section="Leave" />} />
