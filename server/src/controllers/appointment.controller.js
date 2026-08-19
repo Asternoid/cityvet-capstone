@@ -63,6 +63,19 @@ export const updateAppointmentStatus = async (req, res, next) => {
 
     if (fetchErr || !current) return res.status(404).json({ success: false, error: 'Appointment not found.' });
 
+    if (req.user.role === 'technician' && current.technician_id !== userId) {
+      return res.status(403).json({ success: false, error: 'You are not assigned to this appointment.' });
+    }
+
+    const allowedTransitions = {
+      pending_technician_confirmation: ['technician_confirmed', 'reassignment_needed'],
+      technician_confirmed: ['in_progress'],
+      in_progress: ['completed', 'no_show'],
+    };
+    if (!allowedTransitions[current.status]?.includes(newStatus)) {
+      return res.status(400).json({ success: false, error: `Cannot change status from ${current.status} to ${newStatus}.` });
+    }
+
     const updateFields = {
       status: newStatus,
       ...(newStatus === 'completed' && { completed_at: new Date().toISOString() }),
@@ -118,6 +131,10 @@ export const cancelAppointment = async (req, res, next) => {
       .single();
 
     if (fetchErr || !appointment) return res.status(404).json({ success: false, error: 'Appointment not found.' });
+
+    if (appointment.client_id !== userId) {
+      return res.status(403).json({ success: false, error: 'You do not own this appointment.' });
+    }
 
     if (['completed', 'cancelled', 'no_show'].includes(appointment.status)) {
       return res.status(400).json({ success: false, error: 'Cannot cancel an appointment in its current state.' });
@@ -182,6 +199,10 @@ export const rescheduleAppointment = async (req, res, next) => {
       .single();
 
     if (fetchErr || !appointment) return res.status(404).json({ success: false, error: 'Appointment not found.' });
+
+    if (appointment.client_id !== userId) {
+      return res.status(403).json({ success: false, error: 'You do not own this appointment.' });
+    }
 
     if (['completed', 'cancelled', 'no_show'].includes(appointment.status)) {
       return res.status(400).json({ success: false, error: 'Cannot reschedule an appointment in its current state.' });

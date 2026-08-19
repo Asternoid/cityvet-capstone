@@ -7,7 +7,7 @@ export default function BookingPage() {
     barangayId: '',
     preferredDate: '',
     preferredTime: '09:00',
-    animalDescription: ''
+    animalDescription: '',
   });
   const [statusMsg, setStatusMsg] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -21,12 +21,12 @@ export default function BookingPage() {
       const res = await API.post('/appointments/submit', formData);
       setStatusMsg({
         type: 'success',
-        text: `Booking submitted successfully! Reference: ${res.data.data.reference_no}`
+        text: `Booking submitted successfully! Reference: ${res.data.data.reference_no}`,
       });
     } catch (err) {
       setStatusMsg({
         type: 'error',
-        text: err.response?.data?.error || 'Failed to submit booking.'
+        text: err.response?.data?.error || 'Failed to submit booking.',
       });
     } finally {
       setIsSubmitting(false);
@@ -34,58 +34,90 @@ export default function BookingPage() {
   };
 
   return (
-    <div style={{ maxWidth: '600px', margin: '2rem auto', padding: '1rem' }}>
-      <h2>Book a Veterinary Service</h2>
-      {statusMsg && (
-        <p style={{ color: statusMsg.type === 'success' ? 'green' : 'red' }}>
-          {statusMsg.text}
-        </p>
-      )}
-      <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '1rem' }}>
-          <label>Service ID:</label>
-          <input
-            type="number"
-            required
-            value={formData.serviceId}
-            onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
-            style={{ width: '100%', padding: '0.5rem' }}
-          />
+    <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="rounded-card border border-gray-light bg-white p-6 shadow-card sm:p-8">
+        <div className="mb-6">
+          <p className="text-xs uppercase tracking-[0.2em] text-gray-mid">Client Portal</p>
+          <h2 className="font-display mt-2 text-2xl font-bold text-charcoal">Book a Veterinary Service</h2>
         </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label>Barangay ID:</label>
-          <input
-            type="number"
-            required
-            value={formData.barangayId}
-            onChange={(e) => setFormData({ ...formData, barangayId: e.target.value })}
-            style={{ width: '100%', padding: '0.5rem' }}
-          />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label>Preferred Date:</label>
-          <input
-            type="date"
-            required
-            value={formData.preferredDate}
-            onChange={(e) => setFormData({ ...formData, preferredDate: e.target.value })}
-            style={{ width: '100%', padding: '0.5rem' }}
-          />
-        </div>
-        <div style={{ marginBottom: '1rem' }}>
-          <label>Animal Description:</label>
-          <textarea
-            required
-            rows={3}
-            value={formData.animalDescription}
-            onChange={(e) => setFormData({ ...formData, animalDescription: e.target.value })}
-            style={{ width: '100%', padding: '0.5rem' }}
-          />
-        </div>
-        <button type="submit" disabled={isSubmitting} style={{ padding: '0.75rem 1.5rem' }}>
-          {isSubmitting ? 'Submitting...' : 'Submit Booking'}
-        </button>
-      </form>
+
+        {statusMsg && (
+          <div
+            aria-live="polite"
+            className={`mb-5 rounded-card border px-4 py-3 text-sm ${
+              statusMsg.type === 'success'
+                ? 'border-green-forest/20 bg-green-light text-green-forest'
+                : 'border-red-muted/20 bg-red-light text-red-muted'
+            }`}
+          >
+            {statusMsg.text}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-charcoal">Service ID</label>
+            <input
+              type="number"
+              required
+              value={formData.serviceId}
+              onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
+              className="w-full rounded-btn border border-gray-light bg-white px-3 py-2.5 text-sm text-charcoal outline-none transition duration-150 focus:border-teal-deep focus:ring-2 focus:ring-teal-deep/20"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-charcoal">Barangay ID</label>
+            <input
+              type="number"
+              required
+              value={formData.barangayId}
+              onChange={(e) => setFormData({ ...formData, barangayId: e.target.value })}
+              className="w-full rounded-btn border border-gray-light bg-white px-3 py-2.5 text-sm text-charcoal outline-none transition duration-150 focus:border-teal-deep focus:ring-2 focus:ring-teal-deep/20"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-charcoal">Preferred Date</label>
+            <input
+              type="date"
+              required
+              value={formData.preferredDate}
+              onChange={(e) => setFormData({ ...formData, preferredDate: e.target.value })}
+              className="w-full rounded-btn border border-gray-light bg-white px-3 py-2.5 text-sm text-charcoal outline-none transition duration-150 focus:border-teal-deep focus:ring-2 focus:ring-teal-deep/20"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-charcoal">Preferred Time</label>
+            <input
+              type="time"
+              value={formData.preferredTime}
+              onChange={(e) => setFormData({ ...formData, preferredTime: e.target.value })}
+              className="w-full rounded-btn border border-gray-light bg-white px-3 py-2.5 text-sm text-charcoal outline-none transition duration-150 focus:border-teal-deep focus:ring-2 focus:ring-teal-deep/20"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-charcoal">Animal Description</label>
+            <textarea
+              required
+              rows={4}
+              value={formData.animalDescription}
+              onChange={(e) => setFormData({ ...formData, animalDescription: e.target.value })}
+              className="w-full rounded-btn border border-gray-light bg-white px-3 py-2.5 text-sm text-charcoal outline-none transition duration-150 focus:border-teal-deep focus:ring-2 focus:ring-teal-deep/20"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="inline-flex w-full items-center justify-center rounded-btn bg-teal-deep px-4 py-3 text-sm font-medium text-white transition-colors duration-150 hover:bg-teal-mid disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit Booking'}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
