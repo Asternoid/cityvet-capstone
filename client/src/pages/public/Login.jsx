@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import useAuth from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabaseClient';
-
+//bruh
 export default function Login({ onNavigate }) {
   const { fetchCurrentUser } = useAuth();
   const [email, setEmail] = useState('');
