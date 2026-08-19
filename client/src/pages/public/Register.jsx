@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, FileText, LockKeyhole, Upload } from 'lucide-react';
+import { Upload, ChevronDown } from 'lucide-react';
 import API from '../../api/axios';
 
 const initialForm = {
@@ -18,7 +18,11 @@ export default function Register({ onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const update = (field) => (event) => setForm((current) => ({ ...current, [field]: event.target.type === 'checkbox' ? event.target.checked : event.target.value }));
+  const update = (field) => (event) =>
+    setForm((current) => ({
+      ...current,
+      [field]: event.target.type === 'checkbox' ? event.target.checked : event.target.value,
+    }));
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -42,63 +46,180 @@ export default function Register({ onNavigate }) {
       await API.post('/auth/register', payload, { headers: { 'Content-Type': 'multipart/form-data' } });
       onNavigate('Login');
     } catch (requestError) {
-      setError(requestError.response?.data?.error || 'Registration could not be completed. Please check your details and try again.');
+      setError(
+        requestError.response?.data?.error ||
+          'Registration could not be completed. Please check your details and try again.'
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="mx-auto grid max-w-5xl gap-8 py-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start lg:py-12">
-      <aside className="rounded-[24px] bg-teal-deep p-7 text-white shadow-card sm:p-9">
-        <button onClick={() => onNavigate('Landing')} className="mb-12 inline-flex items-center gap-2 text-sm text-white/75 transition-colors hover:text-white"><ArrowLeft size={16} /> Back to CityVet</button>
-        <p className="text-xs font-bold uppercase tracking-[0.18em] text-amber-warm">New client account</p>
-        <h1 className="mt-3 font-display text-3xl font-bold leading-tight">Start your animal’s care journey.</h1>
-        <p className="mt-4 text-sm leading-6 text-white/75">Register once to request home-based veterinary services and follow every appointment from your portal.</p>
-        <div className="mt-10 space-y-5">
-          {['Free city veterinary services', 'Secure account verification', 'Appointment updates in one place'].map((item) => <p key={item} className="flex items-center gap-3 text-sm"><CheckCircle2 size={17} className="shrink-0 text-amber-warm" /> {item}</p>)}
-        </div>
-      </aside>
+    <div className="flex min-h-screen items-center justify-center bg-[#f8f9fa] px-4 py-12">
+      <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
+        {/* Header */}
+        <h2 className="text-2xl font-bold text-[#154e4d]">Create Your Account</h2>
+        <p className="mt-1 text-sm text-gray-500">Join the Gingoog City Veterinary Portal</p>
 
-      <section className="rounded-[24px] border border-gray-light bg-white p-6 shadow-card sm:p-9">
-        <div className="mb-7 flex items-start justify-between gap-4">
-          <div><p className="text-xs font-bold uppercase tracking-[0.18em] text-teal-deep">Step 1 of 1</p><h2 className="mt-2 font-display text-2xl font-bold text-charcoal">Create your account</h2><p className="mt-1 text-sm text-gray-mid">Your ID is reviewed by the clinic administrator before booking.</p></div>
-          <span className="hidden h-11 w-11 items-center justify-center rounded-xl bg-green-light text-teal-deep sm:flex"><LockKeyhole size={20} /></span>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Full name"><input required value={form.fullName} onChange={update('fullName')} className="input" placeholder="Maria Santos" /></Field>
-            <Field label="Email address"><input required type="email" value={form.email} onChange={update('email')} className="input" placeholder="you@example.com" /></Field>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Contact number"><input required pattern="09[0-9]{9}" title="Use the format 09XXXXXXXXX" value={form.contactNumber} onChange={update('contactNumber')} className="input" placeholder="09XXXXXXXXX" /></Field>
-            <Field label="Barangay ID"><input required type="number" min="1" value={form.barangayId} onChange={update('barangayId')} className="input" placeholder="Enter your barangay ID" /></Field>
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Password"><input required type="password" value={form.password} onChange={update('password')} className="input" placeholder="At least 8 characters" /></Field>
-            <Field label="Confirm password"><input required type="password" value={form.confirmPassword} onChange={update('confirmPassword')} className="input" placeholder="Repeat your password" /></Field>
-          </div>
-
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          {/* Full Name */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-charcoal">Government ID</label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-[#a9c2b3] bg-[#f7fbf8] p-4 transition-colors hover:border-teal-deep hover:bg-green-light">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-teal-deep shadow-sm">{govId ? <FileText size={19} /> : <Upload size={19} />}</span>
-              <span className="min-w-0"><span className="block truncate text-sm font-medium text-charcoal">{govId ? govId.name : 'Upload a valid government ID'}</span><span className="block text-xs text-gray-mid">PNG, JPG, or PDF · maximum 5 MB</span></span>
-              <input required type="file" accept="image/png,image/jpeg,application/pdf" className="sr-only" onChange={(event) => setGovId(event.target.files?.[0] || null)} />
+            <label className="mb-1 block text-sm font-medium text-gray-800">Full Name</label>
+            <input
+              required
+              value={form.fullName}
+              onChange={update('fullName')}
+              placeholder="Juan Dela Cruz"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-[#154e4d] focus:ring-1 focus:ring-[#154e4d]"
+            />
+          </div>
+
+          {/* Address/Barangay Dropdown */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-800">Address/Barangay</label>
+            <div className="relative">
+              <select
+                required
+                value={form.barangayId}
+                onChange={update('barangayId')}
+                className="w-full appearance-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#154e4d] focus:ring-1 focus:ring-[#154e4d]"
+              >
+                <option value="" disabled hidden>
+                  Please Select
+                </option>
+                <option value="1">Barangay 1</option>
+                <option value="2">Barangay 2</option>
+                <option value="3">Barangay 3</option>
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-gray-500" />
+            </div>
+          </div>
+
+          {/* Contact & Email */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-800">Contact Number</label>
+              <input
+                required
+                pattern="09[0-9]{9}"
+                title="Use the format 09XXXXXXXXX"
+                value={form.contactNumber}
+                onChange={update('contactNumber')}
+                placeholder="09XX XXX XXX"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-[#154e4d] focus:ring-1 focus:ring-[#154e4d]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-800">Email</label>
+              <input
+                required
+                type="email"
+                value={form.email}
+                onChange={update('email')}
+                placeholder="user@gmail.com"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-[#154e4d] focus:ring-1 focus:ring-[#154e4d]"
+              />
+            </div>
+          </div>
+
+          {/* Password & Confirm Password */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-800">Password</label>
+              <input
+                required
+                type="password"
+                value={form.password}
+                onChange={update('password')}
+                placeholder="••••••••••••"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-[#154e4d] focus:ring-1 focus:ring-[#154e4d]"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-gray-800">Confirm Password</label>
+              <input
+                required
+                type="password"
+                value={form.confirmPassword}
+                onChange={update('confirmPassword')}
+                placeholder="••••••••••••"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition focus:border-[#154e4d] focus:ring-1 focus:ring-[#154e4d]"
+              />
+            </div>
+          </div>
+
+          {/* Government ID Upload */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-gray-800">Government ID</label>
+            <label className="flex cursor-pointer flex-col items-center justify-center rounded-md border border-dashed border-gray-400 bg-white p-4 text-center transition hover:border-[#154e4d]">
+              <Upload className="mb-1 h-5 w-5 text-gray-500" />
+              <span className="text-sm font-medium text-gray-800">
+                {govId ? govId.name : 'Upload Government ID'}
+              </span>
+              <span className="mt-0.5 text-xs text-gray-400">
+                Click to browse or drag & drop (PNG, JPG, PDF)
+              </span>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,application/pdf"
+                className="sr-only"
+                onChange={(event) => setGovId(event.target.files?.[0] || null)}
+              />
             </label>
           </div>
 
-          <label className="flex items-start gap-3 text-xs leading-5 text-gray-mid"><input required type="checkbox" checked={form.agreed} onChange={update('agreed')} className="mt-1 accent-teal-deep" /> <span>I agree to the Terms of Service and Data Privacy Policy of the Office of the City Veterinarian.</span></label>
-          {error && <p role="alert" className="rounded-lg bg-red-light px-3 py-2 text-sm text-red-muted">{error}</p>}
-          <button disabled={loading} className="group flex w-full items-center justify-center gap-2 rounded-btn bg-teal-deep px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-teal-mid disabled:cursor-not-allowed disabled:opacity-60">{loading ? 'Creating account...' : 'Create client account'} {!loading && <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />}</button>
-          <p className="text-center text-sm text-gray-mid">Already registered? <button type="button" onClick={() => onNavigate('Login')} className="font-semibold text-teal-deep hover:underline">Sign in</button></p>
+          {/* Terms Checkbox */}
+          <label className="flex items-start gap-2 pt-1 text-xs text-gray-600">
+            <input
+              required
+              type="checkbox"
+              checked={form.agreed}
+              onChange={update('agreed')}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-[#154e4d]"
+            />
+            <span>
+              I agree to the{' '}
+              <a href="#terms" className="text-[#154e4d] hover:underline">
+                Terms of Service
+              </a>{' '}
+              and{' '}
+              <a href="#privacy" className="text-[#154e4d] hover:underline">
+                Data Privacy Policy
+              </a>{' '}
+              of the Office of the City Veterinarian.
+            </span>
+          </label>
+
+          {error && (
+            <p role="alert" className="rounded-md bg-red-50 p-2 text-xs text-red-600">
+              {error}
+            </p>
+          )}
+
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-md bg-[#154e4d] py-2.5 text-base font-semibold text-white transition hover:bg-[#0f3b3a] disabled:opacity-50"
+          >
+            {loading ? 'Registering...' : 'Register'}
+          </button>
         </form>
-      </section>
+
+        {/* Footer */}
+        <div className="mt-6 text-center text-sm text-gray-600">
+          Already have an account?{' '}
+          <button
+            type="button"
+            onClick={() => onNavigate('Login')}
+            className="font-semibold text-[#154e4d] hover:underline"
+          >
+            Login
+          </button>
+        </div>
+      </div>
     </div>
   );
-}
-
-function Field({ label, children }) {
-  return <label className="block"><span className="mb-1.5 block text-sm font-medium text-charcoal">{label}</span>{children}</label>;
 }

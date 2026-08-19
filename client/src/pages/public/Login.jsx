@@ -30,31 +30,77 @@ export default function Login({ onNavigate }) {
   };
 
   return (
-    <div className="mx-auto max-w-md py-12">
-      <div className="rounded-card border border-gray-light bg-white p-6 shadow-card">
-        <h2 className="mb-4 text-xl font-semibold text-charcoal">Sign in</h2>
+    <div className="flex min-h-screen items-center justify-center bg-[#f8f9fa] px-4 py-12">
+      <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
+        {/* Header */}
+        <h2 className="text-2xl font-bold text-[#154e4d]">Welcome Back</h2>
+        <p className="mt-1 text-sm text-gray-500">Sign in to your veterinary portal account</p>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
           <div>
-            <label className="mb-1 block text-sm font-medium text-charcoal">Email</label>
-            <input required value={email} onChange={(e) => setEmail(e.target.value)} type="email" className="w-full rounded-btn border border-gray-light px-3 py-2 text-sm" />
+            <label className="mb-1.5 block text-sm font-medium text-gray-800">
+              Email Address
+            </label>
+            <input
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              placeholder="user@gmail.com"
+              className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm outline-none transition focus:border-[#154e4d] focus:ring-1 focus:ring-[#154e4d]"
+            />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-charcoal">Password</label>
-            <input required value={password} onChange={(e) => setPassword(e.target.value)} type="password" className="w-full rounded-btn border border-gray-light px-3 py-2 text-sm" />
+            <label className="mb-1.5 block text-sm font-medium text-gray-800">
+              Password
+            </label>
+            <input
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              placeholder="••••••••••••"
+              className="w-full rounded-md border border-gray-300 px-3.5 py-2.5 text-sm outline-none transition focus:border-[#154e4d] focus:ring-1 focus:ring-[#154e4d]"
+            />
+            <div className="mt-2 text-right">
+              <button
+                type="button"
+                onClick={() => onNavigate?.('ForgotPassword')}
+                className="text-sm font-semibold text-[#154e4d] hover:underline"
+              >
+                Forgot Password?
+              </button>
+            </div>
           </div>
 
-          {error ? <div className="text-sm text-red-muted">{error}</div> : null}
+          {error && (
+            <div className="rounded border border-red-200 bg-red-50 p-2 text-xs text-red-600">
+              {error}
+            </div>
+          )}
 
-          <div className="flex items-center justify-between">
-            <button type="submit" disabled={loading} className="rounded-btn bg-teal-deep px-4 py-2 text-sm font-medium text-white">
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-
-            <button type="button" onClick={() => onNavigate('Register')} className="text-sm text-teal-deep">Register</button>
-          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full rounded-md bg-[#154e4d] py-3 text-base font-semibold text-white transition hover:bg-[#0f3b3a] disabled:opacity-50"
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
         </form>
+
+        {/* Footer */}
+        <div className="mt-6 text-center text-sm text-gray-600">
+          Don't have an account?{' '}
+          <button
+            type="button"
+            onClick={() => onNavigate?.('Register')}
+            className="font-semibold text-[#154e4d] hover:underline"
+          >
+            Register here
+          </button>
+        </div>
       </div>
     </div>
   );
