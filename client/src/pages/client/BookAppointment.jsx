@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BookingForm from '../../components/client/BookingForm';
 import API from '../../api/axios';
+import useRoleData from '../../hooks/useRoleData';
 
 const initialValues = {
   petName: '',
@@ -17,6 +18,7 @@ const initialValues = {
 export default function BookAppointment() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
+  const { services } = useRoleData();
 
   const handleSubmit = async (payload) => {
     setSubmitting(true);
@@ -39,7 +41,7 @@ export default function BookAppointment() {
         <p className="text-xs uppercase tracking-[0.2em] text-gray-mid">Client Portal</p>
         <h1 className="mt-2 font-display text-3xl font-bold text-charcoal">Book Appointment</h1>
       </div>
-      <BookingForm initialValues={initialValues} onSubmit={handleSubmit} submitting={submitting} />
+      <BookingForm initialValues={initialValues} services={services} onSubmit={handleSubmit} submitting={submitting} />
     </div>
   );
 }

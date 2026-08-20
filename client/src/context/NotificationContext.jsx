@@ -13,11 +13,8 @@ export function NotificationProvider({ children }) {
 
   const fetchNotifications = useCallback(async () => {
     if (!supabase) {
-      setNotifications([
-        { id: 'demo-1', title: 'Booking confirmed', message: 'Your appointment was confirmed by the clinic.', read: false },
-        { id: 'demo-2', title: 'Status update', message: 'The technician is en route to your appointment.', read: true },
-      ]);
-      setUnreadCount(1);
+      setNotifications([]);
+      setUnreadCount(0);
       return;
     }
 

@@ -2,13 +2,12 @@ import React from 'react';
 import { useLocation } from 'react-router-dom';
 import FeedbackForm from '../../components/client/FeedbackForm';
 import API from '../../api/axios';
+import useRoleData from '../../hooks/useRoleData';
 
 export default function SubmitFeedback() {
   const location = useLocation();
-  const appointment = location.state?.appointment || {
-    id: 'APT-2026-015',
-    service: 'Rabies Vaccination',
-  };
+  const { appointments, loading } = useRoleData();
+  const appointment = location.state?.appointment || appointments.find((item) => item.status === 'completed');
 
   const handleSubmit = async ({ rating, comments }) => {
     await API.post('/feedback/submit', {
@@ -17,6 +16,9 @@ export default function SubmitFeedback() {
       feedbackText: comments,
     });
   };
+
+  if (loading) return <div className="p-8"><p className="text-sm text-gray-mid">Loading completed appointments...</p></div>;
+  if (!appointment) return <div className="p-8"><p className="text-sm text-gray-mid">No completed appointment is available for feedback.</p></div>;
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">

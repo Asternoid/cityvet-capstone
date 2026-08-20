@@ -2,21 +2,13 @@ import React, { useMemo, useState } from 'react';
 import Button from '../common/Button';
 import { getDefaultDateInputValue, isPastDate } from '../../utils/dateUtils';
 
-const defaultServices = [
-  'Rabies Vaccination',
-  'Deworming',
-  'Check-up',
-  'Treatment of Animals',
-  'Spaying / Neutering',
-];
-
-export default function BookingForm({ initialValues, onSubmit, submitting = false }) {
+export default function BookingForm({ initialValues, services = [], onSubmit, submitting = false }) {
   const [form, setForm] = useState({
     petName: initialValues?.petName || '',
     petType: initialValues?.petType || 'Dog',
     breed: initialValues?.breed || '',
     age: initialValues?.age || '',
-    service: initialValues?.service || defaultServices[0],
+    service: initialValues?.service || '',
     preferredDate: initialValues?.preferredDate || getDefaultDateInputValue(1),
     preferredTime: initialValues?.preferredTime || '09:00',
     medicalNotes: initialValues?.medicalNotes || '',
@@ -118,8 +110,8 @@ export default function BookingForm({ initialValues, onSubmit, submitting = fals
             onChange={(event) => handleChange('service', event.target.value)}
             className="w-full rounded-btn border border-gray-light bg-white px-3 py-2.5 text-sm text-charcoal outline-none focus:border-teal-deep focus:ring-2 focus:ring-teal-deep/20"
           >
-            {defaultServices.map((service) => (
-              <option key={service} value={service}>{service}</option>
+            {services.map((service) => (
+              <option key={service.id} value={service.id}>{service.name}</option>
             ))}
           </select>
         </div>

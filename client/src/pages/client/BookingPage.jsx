@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import API from '../../api/axios';
+import useRoleData from '../../hooks/useRoleData';
 
 export default function BookingPage() {
   const [formData, setFormData] = useState({
@@ -11,6 +12,7 @@ export default function BookingPage() {
   });
   const [statusMsg, setStatusMsg] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { services, barangays } = useRoleData();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -56,25 +58,23 @@ export default function BookingPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="mb-1 block text-sm font-medium text-charcoal">Service ID</label>
-            <input
-              type="number"
+            <label className="mb-1 block text-sm font-medium text-charcoal">Service</label>
+            <select
               required
               value={formData.serviceId}
               onChange={(e) => setFormData({ ...formData, serviceId: e.target.value })}
               className="w-full rounded-btn border border-gray-light bg-white px-3 py-2.5 text-sm text-charcoal outline-none transition duration-150 focus:border-teal-deep focus:ring-2 focus:ring-teal-deep/20"
-            />
+            ><option value="">Select a service</option>{services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}</select>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-charcoal">Barangay ID</label>
-            <input
-              type="number"
+            <label className="mb-1 block text-sm font-medium text-charcoal">Barangay</label>
+            <select
               required
               value={formData.barangayId}
               onChange={(e) => setFormData({ ...formData, barangayId: e.target.value })}
               className="w-full rounded-btn border border-gray-light bg-white px-3 py-2.5 text-sm text-charcoal outline-none transition duration-150 focus:border-teal-deep focus:ring-2 focus:ring-teal-deep/20"
-            />
+            ><option value="">Select a barangay</option>{barangays.filter((barangay) => barangay.is_covered).map((barangay) => <option key={barangay.id} value={barangay.id}>{barangay.name}</option>)}</select>
           </div>
 
           <div>
