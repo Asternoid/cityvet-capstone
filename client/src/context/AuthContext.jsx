@@ -93,15 +93,19 @@ export const AuthProvider = ({ children }) => {
   }, [fetchCurrentUser]);
 
   const logout = useCallback(async () => {
-    try {
-      if (supabase) {
+    // Clear local access immediately so the UI cannot remain in the portal
+    // while a network sign-out request is pending.
+    setUser(null);
+    setRole(null);
+    setToken(null);
+    localStorage.removeItem('supabase_access_token');
+
+    if (supabase) {
+      try {
         await supabase.auth.signOut();
+      } catch (error) {
+        console.warn('Remote sign-out failed; local session was cleared.', error);
       }
-    } finally {
-      setUser(null);
-      setRole(null);
-      setToken(null);
-      localStorage.removeItem('supabase_access_token');
     }
   }, []);
 

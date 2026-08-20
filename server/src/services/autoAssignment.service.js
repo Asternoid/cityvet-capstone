@@ -1,6 +1,6 @@
 import { supabaseAdmin } from '../config/supabase.js';
 
-export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, serviceId, barangayId, preferredDate, preferredTime, animalDescription }) => {
+export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, serviceId, barangayId, preferredDate, preferredTime, animalDescription, remarks = null }) => {
   const supabase = supabaseClient;
 
   // 1. Fetch Service Details
@@ -112,7 +112,8 @@ export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, se
       preferred_time: preferredTime,
       urgency_flag: isUrgent,
       status: initialStatus,
-      animal_description: animalDescription
+      animal_description: animalDescription,
+      remarks
     }])
     .select()
     .single();

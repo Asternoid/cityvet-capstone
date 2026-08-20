@@ -2,23 +2,101 @@ import { runAutoAssignment } from '../services/autoAssignment.service.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { sendInAppNotification, sendEmailNotification } from '../services/notification.service.js';
 
+const STATUS_LABELS = {
+  pending_technician_confirmation: 'Pending Technician Confirmation',
+  technician_confirmed: 'Technician Confirmed',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  no_show: 'No-Show',
+  cancelled: 'Cancelled',
+};
+
+function presentAppointment(appointment, serviceName) {
+  return {
+    ...appointment,
+    status_code: appointment.status,
+    status: STATUS_LABELS[appointment.status] || appointment.status,
+    service_name: serviceName || appointment.service_name || 'Veterinary service',
+  };
+}
+
+async function getServiceNames(appointments) {
+  const serviceIds = [...new Set(appointments.map((appointment) => appointment.service_id).filter(Boolean))];
+  if (!serviceIds.length) return new Map();
+
+  const { data, error } = await supabaseAdmin.from('services').select('id, name').in('id', serviceIds);
+  if (error) throw error;
+  return new Map((data || []).map((service) => [service.id, service.name]));
+}
+
+// GET /api/appointments/my
+export const listMyAppointments = async (req, res, next) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('appointments')
+      .select('*')
+      .eq('client_id', req.user.id)
+      .order('preferred_date', { ascending: false });
+
+    if (error) throw error;
+    const serviceNames = await getServiceNames(data || []);
+    return res.json({ success: true, data: (data || []).map((appointment) => presentAppointment(appointment, serviceNames.get(appointment.service_id))) });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// GET /api/appointments/:id
+export const getMyAppointment = async (req, res, next) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('appointments')
+      .select('*')
+      .eq('id', req.params.id)
+      .eq('client_id', req.user.id)
+      .maybeSingle();
+
+    // Do not distinguish an unknown ID from an appointment owned by another client.
+    if (error || !data) return res.status(404).json({ success: false, error: 'Appointment not found.' });
+    const serviceNames = await getServiceNames([data]);
+    return res.json({ success: true, data: presentAppointment(data, serviceNames.get(data.service_id)) });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // POST /api/appointments/submit
 export const submitBooking = async (req, res, next) => {
   try {
-    const { serviceId, barangayId, preferredDate, preferredTime, animalDescription } = req.body;
+    const { serviceId, preferredDate, preferredTime, animalDescription, concernRemarks } = req.body;
     const clientId = req.user.id;
 
-    if (!serviceId || !barangayId || !preferredDate || !preferredTime || !animalDescription) {
+    if (!serviceId || !preferredDate || !preferredTime || !animalDescription) {
       return res.status(400).json({ success: false, error: 'Please provide all booking details.' });
+    }
+
+    if (animalDescription.length > 200 || (concernRemarks && concernRemarks.length > 500)) {
+      return res.status(400).json({ success: false, error: 'Booking text exceeds the allowed length.' });
+    }
+
+    const { data: clientProfile, error: profileError } = await supabaseAdmin
+      .from('client_profiles')
+      .select('barangay_id')
+      .eq('id', clientId)
+      .maybeSingle();
+
+    if (profileError || !clientProfile?.barangay_id) {
+      return res.status(400).json({ success: false, error: 'A verified service address is required before booking.' });
     }
 
     const appointment = await runAutoAssignment({
       clientId,
       serviceId,
-      barangayId,
+      barangayId: clientProfile.barangay_id,
       preferredDate,
       preferredTime,
-      animalDescription
+      animalDescription: animalDescription.trim(),
+      remarks: concernRemarks?.trim() || null,
     });
 
     // Notify Client

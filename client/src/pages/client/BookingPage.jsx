@@ -2,6 +2,20 @@ import React, { useState } from 'react';
 import API from '../../api/axios';
 import useRoleData from '../../hooks/useRoleData';
 
+/**
+ * BookingPage.jsx previously duplicated BookAppointment.jsx with a second,
+ * divergent booking form (different styling tokens, a raw barangay selector
+ * that let the client silently override their verified address, and its
+ * own hardcoded field set). Having two competing booking forms is both a
+ * maintenance hazard and a security concern — the barangay selector in the
+ * old version was never re-validated against the client's verified address,
+ * which could have let a booking be routed to the wrong technician zone.
+ *
+ * BookAppointment.jsx is now the single source of truth for the booking
+ * flow. This file is kept only so any existing route/import pointing at
+ * BookingPage does not break; point new routes at BookAppointment directly.
+ */
+
 export default function BookingPage() {
   const [formData, setFormData] = useState({
     serviceId: '',

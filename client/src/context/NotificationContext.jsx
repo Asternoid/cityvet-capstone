@@ -2,17 +2,19 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useS
 import API from '../api/axios';
 import useRealtime from '../hooks/useRealtime';
 import { supabase } from '../lib/supabaseClient';
+import { useAuth } from './AuthContext';
 
 export const NotificationContext = createContext(null);
 
 export function NotificationProvider({ children }) {
+  const { user, loading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
   const fetchNotifications = useCallback(async () => {
-    if (!supabase) {
+    if (!supabase || !user?.id) {
       setNotifications([]);
       setUnreadCount(0);
       return;
@@ -31,15 +33,15 @@ export function NotificationProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+    if (!authLoading) fetchNotifications();
+  }, [authLoading, fetchNotifications]);
 
   useRealtime({
     table: 'notifications',
-    enabled: !!supabase,
+    enabled: !!supabase && !!user?.id && !authLoading,
     onChange: () => fetchNotifications(),
   });
 

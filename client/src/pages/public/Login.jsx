@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import useAuth from '../../hooks/useAuth';
-import { supabase } from '../../lib/supabaseClient';
-//bruh
+import { supabase, supabaseConfigError } from '../../lib/supabaseClient';
 export default function Login({ onNavigate }) {
   const { fetchCurrentUser } = useAuth();
   const [email, setEmail] = useState('');
@@ -16,14 +15,15 @@ export default function Login({ onNavigate }) {
 
     try {
       if (!supabase) {
-        throw new Error('Authentication is not configured. Add the Supabase environment variables and try again.');
+        throw new Error(supabaseConfigError);
       }
       const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) throw signInError;
       await fetchCurrentUser();
       onNavigate?.('Dashboard');
     } catch (err) {
-      setError(err.message || 'Invalid email or password.');
+      console.warn('Login attempt failed:', err?.status || err?.code || 'authentication failure');
+      setError('Sign-in failed. Check your email and password and try again.');
     } finally {
       setLoading(false);
     }

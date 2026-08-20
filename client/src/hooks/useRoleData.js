@@ -47,16 +47,15 @@ export default function useRoleData({ includeAllAppointments = false } = {}) {
           : appointmentQuery.eq('client_id', user.id);
       }
 
-      const [appointmentResult, servicesResult, barangaysResult, techniciansResult, clientsResult, notificationsResult] = await Promise.all([
+      const [appointmentResult, servicesResult, barangaysResult, techniciansResult, clientsResult] = await Promise.all([
         appointmentQuery,
         supabase.from('services').select('id, name, urgency_type, allows_followup, allows_client_followup, is_active').eq('is_active', true).order('name'),
         supabase.from('barangays').select('id, name, is_covered').order('name'),
         supabase.from('technician_profiles').select('id, full_name, contact_number, account_status, availability_status'),
         includeAllAppointments ? supabase.from('client_profiles').select('id, full_name, barangay_id, verification_status, account_status') : Promise.resolve({ data: [], error: null }),
-        supabase.from('notifications').select('id, recipient_id, title, message, type, is_read, related_appointment_id, created_at').eq('recipient_id', user.id).order('created_at', { ascending: false }),
       ]);
 
-      const firstError = [appointmentResult, servicesResult, barangaysResult, techniciansResult, clientsResult, notificationsResult].find((result) => result.error)?.error;
+      const firstError = [appointmentResult, servicesResult, barangaysResult, techniciansResult, clientsResult].find((result) => result.error)?.error;
       if (firstError) throw firstError;
 
       const services = new Map((servicesResult.data || []).map((item) => [item.id, item]));
@@ -70,7 +69,7 @@ export default function useRoleData({ includeAllAppointments = false } = {}) {
         technicians: techniciansResult.data || [],
         clients: clientsResult.data || [],
         appointments: (appointmentResult.data || []).map((row) => toAppointment(row, services, clients, technicians, barangays)),
-        notifications: notificationsResult.data || [],
+        notifications: [],
       });
     } catch (loadError) {
       setError(loadError.message || 'Unable to load data from Supabase.');

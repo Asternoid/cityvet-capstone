@@ -11,6 +11,14 @@ export const registerClient = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'All fields including Government ID are required.' });
     }
 
+    if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      return res.status(400).json({ success: false, error: 'Registration could not be completed.' });
+    }
+
+    if (!['image/png', 'image/jpeg', 'application/pdf'].includes(govIdFile.mimetype)) {
+      return res.status(400).json({ success: false, error: 'Registration could not be completed.' });
+    }
+
     // 1. Create Supabase Auth User
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -18,7 +26,10 @@ export const registerClient = async (req, res, next) => {
       email_confirm: true
     });
 
-    if (authError) return res.status(400).json({ success: false, error: authError.message });
+    if (authError) {
+      console.error('Supabase registration error:', authError);
+      return res.status(400).json({ success: false, error: 'Registration could not be completed.' });
+    }
     const userId = authData.user.id;
 
     // 2. Upload Gov ID to private bucket 'gov-ids'
@@ -91,6 +102,27 @@ export const getMe = async (req, res, next) => {
         profile: profileData
       }
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const updateProfile = async (req, res, next) => {
+  try {
+    const fullName = typeof req.body.fullName === 'string' ? req.body.fullName.trim() : '';
+    if (!fullName || fullName.length > 100) {
+      return res.status(400).json({ success: false, error: 'A valid name is required.' });
+    }
+
+    const { data: profile, error } = await supabaseAdmin
+      .from('client_profiles')
+      .update({ full_name: fullName, updated_at: new Date().toISOString() })
+      .eq('id', req.user.id)
+      .select('*, barangays(name)')
+      .single();
+
+    if (error || !profile) return res.status(404).json({ success: false, error: 'Profile not found.' });
+    return res.json({ success: true, user: { ...req.user, profile } });
   } catch (err) {
     next(err);
   }

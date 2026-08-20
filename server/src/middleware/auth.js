@@ -30,9 +30,31 @@ export const verifyToken = async (req, res, next) => {
       // ignore and continue to other sources
     }
 
-    // fallback to metadata stored on the Supabase user object
+    // Supabase's built-in user.role is usually "authenticated", not an
+    // application role, so never use it for authorization decisions.
     if (!role) {
-      role = user.user_metadata?.role || user.app_metadata?.role || user.role || null;
+      const metadataRole = user.user_metadata?.role || user.app_metadata?.role;
+      if (['client', 'technician', 'admin'].includes(metadataRole)) role = metadataRole;
+    }
+
+    // Older accounts may not have an application role in metadata.
+    if (!role) {
+      const profileTables = [
+        ['client_profiles', 'client'],
+        ['technician_profiles', 'technician'],
+        ['admin_profiles', 'admin'],
+      ];
+      for (const [table, tableRole] of profileTables) {
+        const { data: profile } = await supabaseAdmin
+          .from(table)
+          .select('id')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (profile) {
+          role = tableRole;
+          break;
+        }
+      }
     }
 
     if (!role) {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, ChevronDown } from 'lucide-react';
 import API from '../../api/axios';
-//bruh
+import { supabase } from '../../lib/supabaseClient';
 const initialForm = {
   fullName: '',
   email: '',
@@ -17,6 +17,16 @@ export default function Register({ onNavigate }) {
   const [govId, setGovId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [barangays, setBarangays] = useState([]);
+
+  React.useEffect(() => {
+    let active = true;
+    if (supabase) {
+      supabase.from('barangays').select('id, name, is_covered').eq('is_covered', true).order('name')
+        .then(({ data }) => { if (active) setBarangays(data || []); });
+    }
+    return () => { active = false; };
+  }, []);
 
   const update = (field) => (event) =>
     setForm((current) => ({
@@ -28,7 +38,7 @@ export default function Register({ onNavigate }) {
     event.preventDefault();
     setError(null);
 
-    if (form.password.length < 8) return setError('Your password must contain at least 8 characters.');
+    if (form.password.length < 8 || form.password.length > 128) return setError('Choose a password between 8 and 128 characters.');
     if (form.password !== form.confirmPassword) return setError('Passwords do not match.');
     if (!govId) return setError('Please upload a government ID to continue.');
     if (!form.agreed) return setError('Please accept the terms and data privacy policy.');
@@ -46,10 +56,8 @@ export default function Register({ onNavigate }) {
       await API.post('/auth/register', payload, { headers: { 'Content-Type': 'multipart/form-data' } });
       onNavigate('Login');
     } catch (requestError) {
-      setError(
-        requestError.response?.data?.error ||
-          'Registration could not be completed. Please check your details and try again.'
-      );
+      console.warn('Registration attempt failed:', requestError.response?.status || 'request failure');
+      setError('Registration could not be completed. Please check your details and try again.');
     } finally {
       setLoading(false);
     }
@@ -89,9 +97,9 @@ export default function Register({ onNavigate }) {
                 <option value="" disabled hidden>
                   Please Select
                 </option>
-                <option value="1">Barangay 1</option>
-                <option value="2">Barangay 2</option>
-                <option value="3">Barangay 3</option>
+                {barangays.map((barangay) => (
+                  <option key={barangay.id} value={barangay.id}>{barangay.name}</option>
+                ))}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-2.5 h-4 w-4 text-gray-500" />
             </div>

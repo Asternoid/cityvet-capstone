@@ -9,7 +9,7 @@ export default function AppointmentCard({ appointment, onReschedule, onCancel, o
   const status = appointment.status || 'pending';
 
   const openStatus = () => {
-    navigate(`/client/appointments/${appointment.id}`, { state: { appointment } });
+    navigate(`/client/appointments/${appointment.id}`);
   };
 
   return (

@@ -30,6 +30,17 @@ body {
   box-sizing: border-box;
 }
 
+.skeleton {
+  background: linear-gradient(90deg, #e9eeeb 25%, #f6f8f6 37%, #e9eeeb 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
 img {
   display: block;
   max-width: 100%;
