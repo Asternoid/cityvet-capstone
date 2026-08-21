@@ -6,7 +6,7 @@ const apiBaseUrl = configuredBaseUrl
   ? configuredBaseUrl.replace(/\/$/, '').endsWith('/api')
     ? configuredBaseUrl.replace(/\/$/, '')
     : `${configuredBaseUrl.replace(/\/$/, '')}/api`
-  : 'http://localhost:5000/api';
+  : 'https://cityvet-capstone.onrender.com/api';
 
 const API = axios.create({
   baseURL: apiBaseUrl,
