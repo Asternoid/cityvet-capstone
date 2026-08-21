@@ -1,13 +1,16 @@
 import axios from 'axios';
 import { supabase } from '../lib/supabaseClient';
 
-const API = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
-});
+const configuredBaseUrl = import.meta.env.VITE_BASE_URL || import.meta.env.VITE_API_BASE_URL;
+const apiBaseUrl = configuredBaseUrl
+  ? configuredBaseUrl.replace(/\/$/, '').endsWith('/api')
+    ? configuredBaseUrl.replace(/\/$/, '')
+    : `${configuredBaseUrl.replace(/\/$/, '')}/api`
+  : 'http://localhost:5000/api';
 
-if (API.defaults.baseURL.includes('localhost:5173')) {
-  API.defaults.baseURL = 'http://localhost:5000/api';
-}
+const API = axios.create({
+  baseURL: apiBaseUrl,
+});
 
 // Keep the API token in sync with the Supabase session.
 API.interceptors.request.use(async (config) => {
