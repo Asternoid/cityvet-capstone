@@ -15,20 +15,8 @@ export const verifyToken = async (req, res, next) => {
       return res.status(401).json({ success: false, error: 'Invalid or expired token' });
     }
 
-    // Try multiple sources for role: unified `profiles` table, user_metadata, or app_metadata
+    // Resolve the application role from trusted metadata or role-specific profiles.
     let role = null;
-
-    try {
-      const { data: profile, error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!profileError && profile && profile.role) role = profile.role;
-    } catch (e) {
-      // ignore and continue to other sources
-    }
 
     // Supabase's built-in user.role is usually "authenticated", not an
     // application role, so never use it for authorization decisions.

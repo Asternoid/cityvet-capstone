@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationContext';
 import { 
   Calendar, 
   CalendarDays, 
@@ -17,9 +18,10 @@ import {
  * PURPOSE: Navigation menu. Matches the 'Notifications' active state.
  * ============================================================
  */
-const Sidebar = ({ activeTab, setActiveTab }) => {
+const Sidebar = ({ activeTab, setActiveTab, unreadCount }) => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const displayName = user?.full_name || user?.fullName || user?.email || 'Technician';
   const menuItems = [
     { id: 'Dashboard', icon: CalendarDays, label: 'Dashboard' },
     { id: 'Appointments', icon: Calendar, label: 'Appointments' },
@@ -62,9 +64,9 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
                   <item.icon size={20} />
                   <span className="text-sm">{item.label}</span>
                 </div>
-                {item.badge && (
+                {item.badge && unreadCount > 0 && (
                   <span className="bg-[#D99B4D] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    {item.badge}
+                    {unreadCount}
                   </span>
                 )}
               </button>
@@ -77,10 +79,10 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       <div className="p-4 border-t border-gray-100">
         <div className="flex items-center gap-3 mb-4 px-2">
           <div className="w-10 h-10 rounded-full bg-[#1C5B56] text-white flex items-center justify-center font-bold text-sm">
-            JD
+            {displayName.slice(0, 2).toUpperCase()}
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-sm font-bold text-gray-700">Juan dela Cruz</span>
+            <span className="text-sm font-bold text-gray-700">{displayName}</span>
             <span className="text-[11px] text-gray-500">Veterinary Technician</span>
           </div>
         </div>
@@ -157,11 +159,12 @@ const getIconStyle = (type) => {
  */
 function NotificationsView() {
   const [activeTab, setActiveTab] = useState('Notifications');
-  const [loading, setLoading] = useState(true);
-  
-  // NO PRE-BUILT DATA. Starts empty.
-  const [unreadNotifications, setUnreadNotifications] = useState([]);
-  const [earlierNotifications, setEarlierNotifications] = useState([]);
+  const { notifications, unreadCount, loading, markAsRead } = useNotifications();
+  const unreadNotifications = notifications.filter((notification) => !notification.read);
+  const earlierNotifications = notifications.filter((notification) => notification.read);
+  const formatDate = (value) => value
+    ? new Date(value).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })
+    : '';
 
   /*
    * ============================================================
@@ -189,20 +192,9 @@ function NotificationsView() {
    * ============================================================
    */
 
-  // Simulate an API call and load empty data
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setUnreadNotifications([]); // Empty array
-      setEarlierNotifications([]); // Empty array
-      setLoading(false);
-    }, 1800);
-
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
     <div className="min-h-screen bg-[#F5F7F6] font-sans flex">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} unreadCount={unreadCount} />
 
       {/* Main Content */}
       <div className="flex-1 ml-64 p-8">
@@ -242,13 +234,12 @@ function NotificationsView() {
                           </div>
                           <div>
                             <p className="text-gray-800 font-medium leading-snug">
-                              {notif.message}
+                              {notif.title ? `${notif.title}: ` : ''}{notif.message}
                             </p>
-                            <p className="text-xs text-gray-400 mt-2">{notif.date}</p>
+                            <p className="text-xs text-gray-400 mt-2">{formatDate(notif.created_at)}</p>
                           </div>
                         </div>
-                        {/* Unread Dot */}
-                        <div className="w-2.5 h-2.5 rounded-full bg-[#1C5B56]"></div>
+                        <button type="button" onClick={() => markAsRead(notif.id)} className="w-2.5 h-2.5 rounded-full bg-[#1C5B56]" aria-label="Mark notification as read" />
                       </div>
                     );
                   })}
@@ -276,9 +267,9 @@ function NotificationsView() {
                         </div>
                         <div>
                           <p className="text-gray-600 font-medium leading-snug">
-                            {notif.message}
+                            {notif.title ? `${notif.title}: ` : ''}{notif.message}
                           </p>
-                          <p className="text-xs text-gray-400 mt-2">{notif.date}</p>
+                          <p className="text-xs text-gray-400 mt-2">{formatDate(notif.created_at)}</p>
                         </div>
                       </div>
                     );

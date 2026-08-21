@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, ChevronDown } from 'lucide-react';
 import API from '../../api/axios';
-import { supabase } from '../../lib/supabaseClient';
 const initialForm = {
   fullName: '',
   email: '',
@@ -18,13 +17,14 @@ export default function Register({ onNavigate }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [barangays, setBarangays] = useState([]);
+  const [loadingBarangays, setLoadingBarangays] = useState(true);
 
   React.useEffect(() => {
     let active = true;
-    if (supabase) {
-      supabase.from('barangays').select('id, name, is_covered').eq('is_covered', true).order('name')
-        .then(({ data }) => { if (active) setBarangays(data || []); });
-    }
+    API.get('/auth/registration-options')
+      .then(({ data }) => { if (active) setBarangays(data?.barangays || []); })
+      .catch(() => { if (active) setError('Unable to load covered barangays. Please refresh and try again.'); })
+      .finally(() => { if (active) setLoadingBarangays(false); });
     return () => { active = false; };
   }, []);
 
@@ -38,9 +38,13 @@ export default function Register({ onNavigate }) {
     event.preventDefault();
     setError(null);
 
+    if (form.fullName.trim().length < 2 || form.fullName.trim().length > 100) return setError('Enter a valid name between 2 and 100 characters.');
+    if (!/^09\d{9}$/.test(form.contactNumber.trim())) return setError('Use a valid Philippine mobile number in the format 09XXXXXXXXX.');
+    if (!form.barangayId) return setError('Please select a covered barangay.');
     if (form.password.length < 8 || form.password.length > 128) return setError('Choose a password between 8 and 128 characters.');
     if (form.password !== form.confirmPassword) return setError('Passwords do not match.');
     if (!govId) return setError('Please upload a government ID to continue.');
+    if (!['image/png', 'image/jpeg', 'application/pdf'].includes(govId.type) || govId.size > 5 * 1024 * 1024) return setError('Government ID must be a PNG, JPG, or PDF file up to 5 MB.');
     if (!form.agreed) return setError('Please accept the terms and data privacy policy.');
 
     setLoading(true);
@@ -53,7 +57,7 @@ export default function Register({ onNavigate }) {
       payload.append('barangayId', form.barangayId.trim());
       payload.append('govId', govId);
 
-      await API.post('/auth/register', payload, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await API.post('/auth/register', payload);
       onNavigate('Login');
     } catch (requestError) {
       console.warn('Registration attempt failed:', requestError.response?.status || 'request failure');
@@ -95,7 +99,7 @@ export default function Register({ onNavigate }) {
                 className="w-full appearance-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#154e4d] focus:ring-1 focus:ring-[#154e4d]"
               >
                 <option value="" disabled hidden>
-                  Please Select
+                  {loadingBarangays ? 'Loading barangays...' : 'Please Select'}
                 </option>
                 {barangays.map((barangay) => (
                   <option key={barangay.id} value={barangay.id}>{barangay.name}</option>
@@ -173,7 +177,15 @@ export default function Register({ onNavigate }) {
                 type="file"
                 accept="image/png,image/jpeg,application/pdf"
                 className="sr-only"
-                onChange={(event) => setGovId(event.target.files?.[0] || null)}
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null;
+                  setGovId(file);
+                  if (file && (!['image/png', 'image/jpeg', 'application/pdf'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+                    setError('Government ID must be a PNG, JPG, or PDF file up to 5 MB.');
+                  } else {
+                    setError(null);
+                  }
+                }}
               />
             </label>
           </div>

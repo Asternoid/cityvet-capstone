@@ -16,9 +16,13 @@ import {
   X
 } from 'lucide-react';
 import useAdminData from '../../hooks/useAdminData';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 export default function Dashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   
   // Close sidebar on resize to desktop
   useEffect(() => {
@@ -31,17 +35,14 @@ export default function Dashboard() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Simulation of a secure session state (In a real app, this comes from JWT/Context)
-  // We keep it generic to show a professional dashboard structure
-  const session = {
-    user: {
-      name: 'Administrator',
-      role: 'Admin',
-      avatar: 'A'
-    }
-  };
-
   const { data: dashboardData, loading: isLoading, error } = useAdminData('/admin/dashboard');
+
+  const displayName = user?.full_name || user?.fullName || user?.email || 'Administrator';
+  const displayRole = user?.role || 'admin';
+  const handleLogout = async () => {
+    await logout();
+    navigate('/', { replace: true });
+  };
 
   // Navigation Menu Structure
   const navigation = [
@@ -175,13 +176,13 @@ export default function Dashboard() {
         <div className="p-4 border-t border-emerald-800/50 flex-shrink-0">
           <div className="flex items-center gap-3 px-2">
             <div className="w-9 h-9 rounded-full bg-emerald-700 flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
-              {session.user.avatar}
+              {displayName.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">{session.user.name}</p>
-              <p className="text-xs text-emerald-300/60 truncate">{session.user.role}</p>
+              <p className="text-sm font-medium text-white truncate">{displayName}</p>
+              <p className="text-xs text-emerald-300/60 truncate">{displayRole}</p>
             </div>
-            <button className="text-emerald-300/50 hover:text-white transition-colors flex-shrink-0">
+            <button onClick={handleLogout} aria-label="Sign out" className="text-emerald-300/50 hover:text-white transition-colors flex-shrink-0">
               <LogOut className="w-4 h-4" />
             </button>
           </div>
@@ -228,7 +229,7 @@ export default function Dashboard() {
           {/* Date / Greeting - Always visible */}
           <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
-              <p className="text-sm text-slate-500 font-medium">Thursday, August 14, 2026</p>
+              <p className="text-sm text-slate-500 font-medium">{new Date().toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
               <h3 className="text-lg sm:text-xl font-semibold text-slate-800 mt-0.5 sm:mt-1">Good morning, Admin</h3>
             </div>
           </div>
@@ -277,7 +278,7 @@ export default function Dashboard() {
                 <div className="xl:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col skeleton-fade-in">
                   <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 flex items-center justify-between">
                     <h4 className="font-semibold text-slate-800 text-sm sm:text-base">Recent Appointments</h4>
-                    <a href="#" className="text-xs sm:text-sm text-emerald-600 hover:text-emerald-700 font-medium whitespace-nowrap">View all &rarr;</a>
+                    <Link to="/admin/appointments" className="text-xs sm:text-sm text-emerald-600 hover:text-emerald-700 font-medium whitespace-nowrap">View all &rarr;</Link>
                   </div>
                   
                   {dashboardData?.recentAppointments?.length ? (

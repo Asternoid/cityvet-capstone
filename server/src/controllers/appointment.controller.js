@@ -1,4 +1,4 @@
-import { runAutoAssignment } from '../services/autoAssignment.service.js';
+import { runAutoAssignment, validateBookingRequest } from '../services/autoAssignment.service.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { sendInAppNotification, sendEmailNotification } from '../services/notification.service.js';
 
@@ -77,6 +77,22 @@ export const submitBooking = async (req, res, next) => {
 
     if (animalDescription.length > 200 || (concernRemarks && concernRemarks.length > 500)) {
       return res.status(400).json({ success: false, error: 'Booking text exceeds the allowed length.' });
+    }
+
+    const { data: service, error: serviceError } = await supabaseAdmin
+      .from('services')
+      .select('*')
+      .eq('id', serviceId)
+      .maybeSingle();
+
+    if (serviceError || !service) {
+      return res.status(400).json({ success: false, error: 'Invalid service selected.' });
+    }
+
+    try {
+      validateBookingRequest({ preferredDate, service });
+    } catch (validationError) {
+      return res.status(400).json({ success: false, error: validationError.message });
     }
 
     const { data: clientProfile, error: profileError } = await supabaseAdmin

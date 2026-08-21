@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import { sendEmailNotification, sendInAppNotification } from '../services/notification.service.js';
+import { findReplacementTechnicians } from '../services/reassignment.service.js';
 
 async function getAuthEmail(userId) {
   const { data } = await supabaseAdmin.auth.admin.getUserById(userId);
@@ -317,4 +318,158 @@ export const generateAdminReport = async (req, res, next) => {
     const rows = (data || []).map(presentAdminAppointment);
     res.json({ success: true, data: { type, format, from, to, rows, generatedAt: new Date().toISOString() }, meta: { count: rows.length } });
   } catch (err) { next(err); }
+};
+
+export const getReassignmentQueue = async (req, res, next) => {
+  try {
+    const { from, to } = req.query;
+    const startDate = from || new Date().toISOString().slice(0, 10);
+    const endDate = to || startDate;
+
+    const { data: appointments, error: appointmentError } = await supabaseAdmin
+      .from('appointments')
+      .select('id, reference_no, technician_id, barangay_id, preferred_date, status, client_profiles(full_name), services(name)')
+      .in('status', ['pending_technician_confirmation', 'reassignment_needed'])
+      .gte('preferred_date', startDate)
+      .lte('preferred_date', endDate);
+
+    if (appointmentError) throw appointmentError;
+
+    const { data: leaveRequests, error: leaveError } = await supabaseAdmin
+      .from('leave_requests')
+      .select('*')
+      .eq('status', 'confirmed')
+      .gte('start_date', startDate)
+      .lte('end_date', endDate);
+
+    if (leaveError) throw leaveError;
+
+    const { data: technicianMap, error: mapError } = await supabaseAdmin
+      .from('barangay_technician_map')
+      .select('barangay_id, technician_id, is_primary');
+
+    if (mapError) throw mapError;
+
+    const appointmentCounts = {};
+    for (const row of appointments || []) {
+      if (!row.technician_id || !row.preferred_date) continue;
+      appointmentCounts[row.technician_id] = appointmentCounts[row.technician_id] || {};
+      appointmentCounts[row.technician_id][row.preferred_date] = (appointmentCounts[row.technician_id][row.preferred_date] || 0) + 1;
+    }
+
+    const queue = await Promise.all((appointments || []).map(async (appointment) => ({
+      ...appointment,
+      eligible_replacements: await findReplacementTechnicians({
+        barangayId: appointment.barangay_id,
+        preferredDate: appointment.preferred_date,
+        excludeTechnicianId: appointment.technician_id,
+        technicianMap: technicianMap || [],
+        leaveRequests: leaveRequests || [],
+        appointmentCounts,
+        dailyCapacity: 3,
+      }),
+    })));
+
+    res.status(200).json({ success: true, data: queue, meta: { count: queue.length } });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const resolveAppointmentReassignment = async (req, res, next) => {
+  try {
+    const { technicianId, reason } = req.body;
+
+    if (!technicianId) {
+      return res.status(400).json({ success: false, error: 'technicianId is required.' });
+    }
+
+    const { data: appointment, error: fetchError } = await supabaseAdmin
+      .from('appointments')
+      .select('id, reference_no, technician_id, status, preferred_date, barangay_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+
+    if (fetchError || !appointment) {
+      return res.status(404).json({ success: false, error: 'Appointment not found.' });
+    }
+
+    const { data: technician, error: technicianError } = await supabaseAdmin
+      .from('technician_profiles')
+      .select('id, full_name, account_status')
+      .eq('id', technicianId)
+      .maybeSingle();
+
+    if (technicianError || !technician || technician.account_status !== 'active') {
+      return res.status(400).json({ success: false, error: 'Selected technician is not active.' });
+    }
+
+    const { data: mapping, error: mappingError } = await supabaseAdmin
+      .from('barangay_technician_map')
+      .select('technician_id')
+      .eq('barangay_id', appointment.barangay_id)
+      .eq('technician_id', technicianId)
+      .maybeSingle();
+
+    if (mappingError) throw mappingError;
+    if (!mapping) {
+      return res.status(409).json({ success: false, error: 'Selected technician is not assigned to this service area.' });
+    }
+
+    const { data: leaveRows, error: leaveError } = await supabaseAdmin
+      .from('leave_requests')
+      .select('technician_id, start_date, end_date, status')
+      .eq('technician_id', technicianId)
+      .eq('status', 'confirmed');
+
+    if (leaveError) throw leaveError;
+
+    const isOnLeave = (leaveRows || []).some((leave) => {
+      const date = appointment.preferred_date;
+      return date >= leave.start_date && date <= leave.end_date;
+    });
+
+    if (isOnLeave) {
+      return res.status(409).json({ success: false, error: 'The selected technician is on leave for that date.' });
+    }
+
+    const { count: assignmentCount, error: assignmentError } = await supabaseAdmin
+      .from('appointments')
+      .select('id', { count: 'exact', head: true })
+      .eq('technician_id', technicianId)
+      .eq('preferred_date', appointment.preferred_date)
+      .in('status', ['pending_technician_confirmation', 'technician_confirmed', 'in_progress']);
+
+    if (assignmentError) throw assignmentError;
+    if ((assignmentCount || 0) >= 3) {
+      return res.status(409).json({ success: false, error: 'Selected technician has reached the daily assignment capacity.' });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('appointments')
+      .update({
+        technician_id: technicianId,
+        status: 'pending_technician_confirmation',
+        remarks: reason || appointment.remarks || null,
+      })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    await supabaseAdmin.from('appointment_status_logs').insert({
+      appointment_id: req.params.id,
+      old_status: appointment.status,
+      new_status: 'pending_technician_confirmation',
+      changed_by: req.user.id,
+      notes: `Admin reassigned appointment to ${technician.full_name}${reason ? ` (${reason})` : ''}.`,
+    });
+
+    await sendInAppNotification(technicianId, 'New Service Assignment', `Appointment ${appointment.reference_no} has been reassigned to you.`, 'appointment', req.params.id);
+
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
 };

@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import useAuth from '../../hooks/useAuth';
 import { supabase, supabaseConfigError } from '../../lib/supabaseClient';
 export default function Login({ onNavigate }) {
-  const { fetchCurrentUser } = useAuth();
+  const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [resetting, setResetting] = useState(false);
+  const [resetMessage, setResetMessage] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,15 +19,35 @@ export default function Login({ onNavigate }) {
       if (!supabase) {
         throw new Error(supabaseConfigError);
       }
-      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      if (signInError) throw signInError;
-      await fetchCurrentUser();
+      await login({ email: email.trim(), password });
       onNavigate?.('Dashboard');
     } catch (err) {
       console.warn('Login attempt failed:', err?.status || err?.code || 'authentication failure');
       setError('Sign-in failed. Check your email and password and try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    setError(null);
+    setResetMessage(null);
+    if (!email.trim()) {
+      setError('Enter your email address first to reset your password.');
+      return;
+    }
+
+    setResetting(true);
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/login`,
+      });
+      if (resetError) throw resetError;
+      setResetMessage('If an account uses that email, a password reset link has been sent.');
+    } catch (resetError) {
+      setError('Unable to send a password reset link right now. Please try again.');
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -67,10 +89,11 @@ export default function Login({ onNavigate }) {
             <div className="mt-2 text-right">
               <button
                 type="button"
-                onClick={() => onNavigate?.('ForgotPassword')}
+                onClick={handlePasswordReset}
+                disabled={resetting}
                 className="text-sm font-semibold text-[#154e4d] hover:underline"
               >
-                Forgot Password?
+                {resetting ? 'Sending...' : 'Forgot Password?'}
               </button>
             </div>
           </div>
@@ -80,6 +103,7 @@ export default function Login({ onNavigate }) {
               {error}
             </div>
           )}
+          {resetMessage && <div className="rounded border border-green-200 bg-green-50 p-2 text-xs text-green-700">{resetMessage}</div>}
 
           <button
             type="submit"

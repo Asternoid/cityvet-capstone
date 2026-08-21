@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { registerClient, getMe, updateProfile } from '../controllers/auth.controller.js';
+import { registerClient, getMe, updateProfile, loginUser, logoutUser, getRegistrationOptions } from '../controllers/auth.controller.js';
 import { verifyToken } from '../middleware/auth.js';
 import { requireRole } from '../middleware/roleCheck.js';
 import rateLimit from 'express-rate-limit';
@@ -15,6 +15,10 @@ const authLimiter = rateLimit({
 });
 const router = express.Router();
 
+router.post('/login', authLimiter, loginUser);
+router.get('/registration-options', getRegistrationOptions);
+router.post('/logout', verifyToken, logoutUser);
+router.get('/register', (req, res) => res.status(405).json({ success: false, error: 'Registration must be submitted using the registration form.' }));
 router.post('/register', authLimiter, upload.single('govId'), registerClient);
 router.get('/me', verifyToken, getMe);
 router.patch('/profile', verifyToken, requireRole('client'), updateProfile);

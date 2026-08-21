@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import API from '../../api/axios';
 import { 
   Home, 
   Calendar, 
@@ -55,7 +56,8 @@ const StatusBadge = ({ status }) => {
  */
 const Sidebar = ({ activeTab, setActiveTab }) => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const displayName = user?.full_name || user?.fullName || user?.email || 'Technician';
   const menuItems = [
     { id: 'Dashboard', icon: Home, label: 'Dashboard' },
     { id: 'Appointments', icon: Calendar, label: 'Appointments' },
@@ -113,10 +115,10 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       <div className="p-4 border-t border-gray-100">
         <div className="flex items-center gap-3 mb-4 px-2">
           <div className="w-10 h-10 rounded-full bg-[#1C5B56] text-white flex items-center justify-center font-bold text-sm">
-            JD
+            {displayName.slice(0, 2).toUpperCase()}
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-sm font-bold text-gray-700">Juan dela Cruz</span>
+            <span className="text-sm font-bold text-gray-700">{displayName}</span>
             <span className="text-[11px] text-gray-500">Veterinary Technician</span>
           </div>
         </div>
@@ -185,10 +187,12 @@ const SkeletonLoader = () => {
 function App() {
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
   
   // NO PRE-BUILT DATA. Initialized as empty array.
   const [appointments, setAppointments] = useState([]);
   const [stats, setStats] = useState([]);
+  const [error, setError] = useState(null);
 
   /*
    * ============================================================
@@ -230,26 +234,38 @@ function App() {
    * ============================================================
    */
   useEffect(() => {
-    // Simulate network request delay
-    const timer = setTimeout(() => {
-      
-      // DECLARE EMPTY DATA SOURCES (No hardcoded data)
-      const emptyAppointments = [];
-      const emptyStats = [
-        { label: 'Pending', count: 0, color: 'text-[#D99B4D]' },
-        { label: 'Confirmed', count: 0, color: 'text-white' },
-        { label: 'In Progress', count: 0, color: 'text-white' },
-        { label: 'Done', count: 0, color: 'text-white' },
-      ];
-
-      setAppointments(emptyAppointments);
-      setStats(emptyStats);
-      setLoading(false);
-
-    }, 1800); // 1.8 seconds delay to let the user see the skeleton
-
-    return () => clearTimeout(timer);
-  }, []);
+    let active = true;
+    const loadQueue = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await API.get('/technicians/queue/today');
+        const queue = Array.isArray(response.data?.data) ? response.data.data : [];
+        if (!active) return;
+        setAppointments(queue.map((appointment) => ({
+          id: appointment.id,
+          name: appointment.client_profiles?.full_name || 'Client',
+          service: appointment.services?.name || 'Veterinary service',
+          location: appointment.barangays?.name || 'Assigned barangay',
+          time: appointment.preferred_time,
+          status: appointment.status === 'pending_technician_confirmation' ? 'Pending Confirmation' : appointment.status.replaceAll('_', ' '),
+          borderColor: appointment.urgency_flag ? 'border-l-[#D99B4D]' : 'border-l-[#5BC2C1]',
+        })));
+        setStats([
+          { label: 'Pending', count: queue.filter((item) => item.status === 'pending_technician_confirmation').length },
+          { label: 'Confirmed', count: queue.filter((item) => item.status === 'technician_confirmed').length },
+          { label: 'In Progress', count: queue.filter((item) => item.status === 'in_progress').length },
+          { label: 'Done', count: 0 },
+        ]);
+      } catch (loadError) {
+        if (active) setError('Unable to load today\'s appointments. Please try again.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    if (user?.id) loadQueue();
+    return () => { active = false; };
+  }, [user?.id]);
 
   return (
     // Main Layout Container
@@ -279,11 +295,11 @@ function App() {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="text-[#9BC8C4] text-sm font-medium mb-1">Welcome back,</p>
-                      <h1 className="text-3xl font-bold tracking-tight">Juan dela Cruz</h1>
-                      <p className="text-[#9BC8C4] text-sm mt-1">Friday, August 21, 2026</p>
+                      <h1 className="text-3xl font-bold tracking-tight">{user?.full_name || user?.fullName || user?.email || 'Technician'}</h1>
+                      <p className="text-[#9BC8C4] text-sm mt-1">{new Date().toLocaleDateString('en-PH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                     </div>
                     <div className="w-12 h-12 rounded-full bg-[#2d7a74] flex items-center justify-center font-bold text-white">
-                      JD
+                      {(user?.full_name || user?.fullName || user?.email || 'Technician').slice(0, 2).toUpperCase()}
                     </div>
                   </div>
 
@@ -308,6 +324,8 @@ function App() {
                     ))}
                   </div>
                 </header>
+
+                {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
                 {/* --- APPOINTMENTS BODY SECTION --- */}
                 <main className="p-8 flex-1">

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import API from '../../api/axios';
 import { 
   CalendarDays, 
   Bell, 
@@ -49,7 +50,8 @@ const StatusBadge = ({ status }) => {
  */
 const Sidebar = ({ activeTab, setActiveTab }) => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const displayName = user?.full_name || user?.fullName || user?.email || 'Technician';
   const menuItems = [
     { id: 'Dashboard', icon: CalendarDays, label: 'Dashboard' },
     { id: 'Appointments', icon: CalendarDays, label: 'Appointments' },
@@ -101,9 +103,9 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
 
       <div className="p-4 border-t border-gray-100">
         <div className="flex items-center gap-3 mb-4 px-2">
-          <div className="w-10 h-10 rounded-full bg-[#1C5B56] text-white flex items-center justify-center font-bold text-sm">JD</div>
+          <div className="w-10 h-10 rounded-full bg-[#1C5B56] text-white flex items-center justify-center font-bold text-sm">{displayName.slice(0, 2).toUpperCase()}</div>
           <div className="flex flex-col text-left">
-            <span className="text-sm font-bold text-gray-700">Juan dela Cruz</span>
+            <span className="text-sm font-bold text-gray-700">{displayName}</span>
             <span className="text-[11px] text-gray-500">Veterinary Technician</span>
           </div>
         </div>
@@ -245,17 +247,22 @@ function WeeklySchedule() {
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState([]);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
-  const [selectedDate, setSelectedDate] = useState('14');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [error, setError] = useState(null);
+  const { user } = useAuth();
 
-  const weekDays = [
-    { day: 'Mon', date: '11' },
-    { day: 'Tue', date: '12' },
-    { day: 'Wed', date: '13' },
-    { day: 'Thu', date: '14', hasDot: true },
-    { day: 'Fri', date: '15', hasDot: true },
-    { day: 'Sat', date: '16', hasDot: true },
-    { day: 'Sun', date: '17' },
-  ];
+  const weekStart = new Date();
+  const dayOfWeek = weekStart.getDay();
+  weekStart.setDate(weekStart.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(weekStart.getDate() + index);
+    return {
+      day: date.toLocaleDateString('en-PH', { weekday: 'short' }),
+      date: date.toISOString().slice(0, 10),
+      label: date.getDate(),
+    };
+  });
 
   /*
    * ============================================================
@@ -285,17 +292,39 @@ function WeeklySchedule() {
    * ============================================================
    */
 
-  // Mock Data Fetch with NO hardcoded data. Starts blank.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      // Set empty array to prove no prebuilt data exists.
-      // If you connect an API, you'll place the fetch here.
-      setAppointments([]);
-      setLoading(false);
-    }, 1500);
-
-    return () => clearTimeout(timer);
-  }, []);
+    let active = true;
+    const loadSchedule = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await API.get('/technicians/queue/today', { params: { date: selectedDate } });
+        const queue = Array.isArray(response.data?.data) ? response.data.data : [];
+        if (!active) return;
+        setAppointments(queue.map((appointment) => ({
+          id: appointment.id,
+          name: appointment.client_profiles?.full_name || 'Client',
+          service: appointment.services?.name || 'Veterinary service',
+          location: appointment.barangays?.name || 'Assigned barangay',
+          time: appointment.preferred_time,
+          status: appointment.status === 'pending_technician_confirmation' ? 'Pending Confirmation'
+            : appointment.status === 'technician_confirmed' ? 'Technician Confirmed'
+              : appointment.status === 'in_progress' ? 'In Progress'
+                : appointment.status === 'completed' ? 'Completed'
+                  : appointment.status === 'no_show' ? 'No-Show' : appointment.status,
+          contact: appointment.client_profiles?.contact_number,
+          date: appointment.preferred_date,
+          fullAddress: appointment.barangays?.name,
+        })));
+      } catch (loadError) {
+        if (active) setError('Unable to load the selected schedule. Please try again.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    if (user?.id) loadSchedule();
+    return () => { active = false; };
+  }, [selectedDate, user?.id]);
 
   // If a user clicks a card, we go to Details view
   if (selectedAppointment) {
@@ -313,7 +342,7 @@ function WeeklySchedule() {
           {/* Header */}
           <div className="mb-6">
             <h1 className="text-2xl font-bold text-gray-800">Weekly Schedule</h1>
-            <p className="text-gray-400 text-sm mt-1">Aug 11 – 17, 2025</p>
+            <p className="text-gray-400 text-sm mt-1">{weekDays[0].date} – {weekDays[6].date}</p>
           </div>
 
           {/* Calendar Selection Bar */}
@@ -329,19 +358,18 @@ function WeeklySchedule() {
                 }`}
               >
                 <span className="text-[11px] font-medium">{item.day}</span>
-                <span className="text-sm font-bold mt-1">{item.date}</span>
-                {item.hasDot && (
-                  <span className={`w-1.5 h-1.5 rounded-full mt-1 ${selectedDate === item.date ? 'bg-white/70' : 'bg-[#1C5B56]'}`}></span>
-                )}
+                <span className="text-sm font-bold mt-1">{item.label}</span>
               </button>
             ))}
           </div>
 
           {/* Daily Schedule List */}
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-base font-bold text-gray-700">Thu, Aug 14</h2>
+            <h2 className="text-base font-bold text-gray-700">{new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })}</h2>
             <span className="text-xs text-gray-400">{appointments.length} appointments</span>
           </div>
+
+          {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
           <div className="space-y-4">
             {appointments.length === 0 ? (

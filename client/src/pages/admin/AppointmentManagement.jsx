@@ -46,12 +46,24 @@ export default function AppointmentManagement() {
 
   const statusFilter = activeTab === 'exceptions' ? 'reassignment_needed' : activeTab === 'all' ? 'all' : activeTab;
   const { data: appointmentsData, loading, error, reload } = useAdminData('/admin/appointments', { status: statusFilter, search });
+  const { data: reassignmentQueueData, loading: queueLoading } = useAdminData('/admin/reassignment-queue', {
+    from: new Date().toISOString().slice(0, 10),
+    to: new Date().toISOString().slice(0, 10),
+  });
   const appointments = Array.isArray(appointmentsData) ? appointmentsData : [];
+  const reevaluationQueue = Array.isArray(reassignmentQueueData) ? reassignmentQueueData : [];
+  const exceptionCount = reevaluationQueue.length;
 
   const assignAppointment = async (appointment) => {
     const technicianId = window.prompt('Enter the technician user ID to assign:');
     if (!technicianId) return;
-    await API.post(`/admin/appointments/${appointment.id}/assign`, { technicianId });
+    await API.post(`/admin/appointments/${appointment.id}/reassign`, { technicianId });
+    reload();
+  };
+
+  const assignRecommendedTechnician = async (appointment, technicianId) => {
+    if (!technicianId) return;
+    await API.post(`/admin/appointments/${appointment.id}/reassign`, { technicianId, reason: 'Recommended replacement technician selected from reassignment queue.' });
     reload();
   };
 
@@ -240,7 +252,7 @@ export default function AppointmentManagement() {
           {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
           {/* --- SKELETON LOADING STATE --- */}
-          {loading ? (
+          {loading || queueLoading ? (
             <>
               {/* Alert Skeleton */}
               <SkeletonAlertSection />
@@ -281,7 +293,9 @@ export default function AppointmentManagement() {
               <div className="mb-6 bg-red-50/50 border border-red-200 rounded-lg p-4 flex items-center justify-between skeleton-fade-in">
                 <div className="flex items-center gap-3">
                   <AlertTriangle className="w-5 h-5 text-red-500" />
-                  <span className="text-sm font-semibold text-red-700">Appointments require immediate attention</span>
+                  <span className="text-sm font-semibold text-red-700">
+                    {exceptionCount > 0 ? `${exceptionCount} appointment${exceptionCount > 1 ? 's' : ''} require immediate attention` : 'No appointments require immediate attention'}
+                  </span>
                 </div>
                 <button 
                   onClick={() => setActiveTab('exceptions')}
@@ -348,41 +362,69 @@ export default function AppointmentManagement() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {appointments.map((appointment) => (
-                          <tr key={appointment.id} className="hover:bg-slate-50/50 transition-colors">
-                            <td className="px-6 py-4 font-medium text-slate-700">{appointment.reference_no}</td>
-                            <td className="px-6 py-4 text-slate-600">{appointment.client}</td>
-                            <td className="px-6 py-4 text-slate-600">{appointment.service}</td>
-                            <td className="px-6 py-4 text-slate-600">{appointment.barangay}</td>
-                            <td className="px-6 py-4 text-slate-600">
-                              {appointment.preferred_date} <span className="text-slate-400 text-xs">{appointment.preferred_time}</span>
-                            </td>
-                            <td className="px-6 py-4 text-slate-600">
-                              {appointment.technician || <span className="text-slate-400 italic">Unassigned</span>}
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
-                                ${appointment.status_label === 'Confirmed' ? 'bg-emerald-100 text-emerald-700' :
-                                  appointment.status_label === 'Pending' ? 'bg-amber-100 text-amber-700' :
-                                  appointment.status_label === 'Completed' ? 'bg-blue-100 text-blue-700' :
-                                  appointment.status_label === 'Declined' ? 'bg-red-100 text-red-700' :
-                                  'bg-slate-100 text-slate-700'
-                                }`}>
-                                {appointment.status_label}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                              {!appointment.technician_id && (
-                                <button 
-                                  onClick={() => assignAppointment(appointment)}
-                                  className="px-3 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg hover:bg-emerald-800 transition-colors shadow-sm"
-                                >
-                                  Assign
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
+                        {appointments.map((appointment) => {
+                          const queueItem = reevaluationQueue.find((item) => item.id === appointment.id);
+                          const replacementPreview = queueItem?.eligible_replacements?.length ? queueItem.eligible_replacements.join(', ') : null;
+                          const replacements = queueItem?.eligible_replacements || [];
+
+                          return (
+                            <tr key={appointment.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-6 py-4 font-medium text-slate-700">{appointment.reference_no}</td>
+                              <td className="px-6 py-4 text-slate-600">{appointment.client}</td>
+                              <td className="px-6 py-4 text-slate-600">{appointment.service}</td>
+                              <td className="px-6 py-4 text-slate-600">{appointment.barangay}</td>
+                              <td className="px-6 py-4 text-slate-600">
+                                {appointment.preferred_date} <span className="text-slate-400 text-xs">{appointment.preferred_time}</span>
+                              </td>
+                              <td className="px-6 py-4 text-slate-600">
+                                {appointment.technician || <span className="text-slate-400 italic">Unassigned</span>}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex flex-col gap-1">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                    ${appointment.status_label === 'Confirmed' ? 'bg-emerald-100 text-emerald-700' :
+                                      appointment.status_label === 'Pending' ? 'bg-amber-100 text-amber-700' :
+                                      appointment.status_label === 'Completed' ? 'bg-blue-100 text-blue-700' :
+                                      appointment.status_label === 'Declined' ? 'bg-red-100 text-red-700' :
+                                      'bg-slate-100 text-slate-700'
+                                    }`}>
+                                    {appointment.status_label}
+                                  </span>
+                                  {replacementPreview && (
+                                    <span className="text-[10px] text-amber-700">
+                                      Replacements: {replacementPreview}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                {replacements.length > 0 ? (
+                                  <div className="flex flex-col items-end gap-2">
+                                    {replacements.slice(0, 2).map((technicianId) => (
+                                      <button
+                                        key={technicianId}
+                                        onClick={() => assignRecommendedTechnician(appointment, technicianId)}
+                                        className="px-3 py-1.5 bg-amber-600 text-white text-[11px] font-semibold rounded-lg hover:bg-amber-700 transition-colors shadow-sm"
+                                      >
+                                        Assign {technicianId}
+                                      </button>
+                                    ))}
+                                    {replacements.length > 2 && (
+                                      <span className="text-[10px] text-slate-500">+{replacements.length - 2} more</span>
+                                    )}
+                                  </div>
+                                ) : !appointment.technician_id ? (
+                                  <button 
+                                    onClick={() => assignAppointment(appointment)}
+                                    className="px-3 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg hover:bg-emerald-800 transition-colors shadow-sm"
+                                  >
+                                    Assign
+                                  </button>
+                                ) : null}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>

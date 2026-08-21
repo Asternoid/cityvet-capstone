@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import API from '../../api/axios';
 import { 
   Calendar, 
   CalendarDays, 
@@ -20,7 +21,8 @@ import {
  */
 const Sidebar = ({ activeTab, setActiveTab }) => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const displayName = user?.full_name || user?.fullName || user?.email || 'Technician';
   const menuItems = [
     { id: 'Dashboard', icon: CalendarDays, label: 'Dashboard' },
     { id: 'Appointments', icon: Calendar, label: 'Appointments' },
@@ -78,10 +80,10 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       <div className="p-4 border-t border-gray-100">
         <div className="flex items-center gap-3 mb-4 px-2">
           <div className="w-10 h-10 rounded-full bg-[#1C5B56] text-white flex items-center justify-center font-bold text-sm">
-            JD
+            {displayName.slice(0, 2).toUpperCase()}
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-sm font-bold text-gray-700">Juan dela Cruz</span>
+            <span className="text-sm font-bold text-gray-700">{displayName}</span>
             <span className="text-[11px] text-gray-500">Veterinary Technician</span>
           </div>
         </div>
@@ -101,60 +103,51 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
  */
 function LeaveUnavailability() {
   const [activeTab, setActiveTab] = useState('Leave');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: '', text: '' });
   
-  // Form State (Initialized as empty strings - NO pre-built data)
   const [formData, setFormData] = useState({
     startDate: '',
     endDate: '',
     reason: ''
   });
 
-  // Handle Input Changes
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  // Handle Form Submission
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Validate inputs (checks if empty)
-    if (!formData.startDate || !formData.endDate || !formData.reason) {
-      alert("Please fill in all required fields.");
+
+    if (!formData.startDate || !formData.endDate || !formData.reason.trim()) {
+      setMessage({ type: 'error', text: 'Please fill in all required fields.' });
       return;
     }
 
-    /*
-     * ============================================================
-     * PROFESSIONAL IMPLEMENTATION NOTE: ROUTING & BACKEND
-     * ============================================================
-     * 
-     * 1. Routing:
-     *    - This component should be routed to `/leave-unavailability`.
-     *    - In your main App.jsx: 
-     *      import LeaveUnavailability from './LeaveUnavailability';
-     *      <Route path="/leave" element={<LeaveUnavailability />} />
-     *    - In the Sidebar, replace the onClick with:
-     *      import { Link } from 'react-router-dom';
-     *      <Link to="/leave">...</Link>
-     * 
-     * 2. Backend Integration:
-     *    - Replace the `alert` in handleSubmit with an API call.
-     *    - Example:
-     *      fetch('/api/leaves', {
-     *        method: 'POST',
-     *        headers: { 'Content-Type': 'application/json' },
-     *        body: JSON.stringify(formData)
-     *      }).then(res => {
-     *          if(res.ok) {
-     *             // Navigate user back or show success toast
-     *          }
-     *      });
-     * ============================================================
-     */
-    console.log("Form submitted:", formData);
-    // Reset form after submission (optional)
-    setFormData({ startDate: '', endDate: '', reason: '' });
+    if (new Date(`${formData.endDate}T00:00:00`) < new Date(`${formData.startDate}T00:00:00`)) {
+      setMessage({ type: 'error', text: 'End date cannot be earlier than start date.' });
+      return;
+    }
+
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      await API.post('/technicians/leave', {
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        reason: formData.reason.trim(),
+      });
+
+      setMessage({ type: 'success', text: 'Leave request submitted successfully. Admin review is pending.' });
+      setFormData({ startDate: '', endDate: '', reason: '' });
+    } catch (error) {
+      const apiMessage = error?.response?.data?.error || 'Unable to submit leave request right now.';
+      setMessage({ type: 'error', text: apiMessage });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -234,12 +227,19 @@ function LeaveUnavailability() {
                 />
               </div>
 
+              {message.text && (
+                <div className={`rounded-lg border px-3 py-2 text-sm ${message.type === 'success' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                  {message.text}
+                </div>
+              )}
+
               {/* Submit Button */}
               <button
                 type="submit"
-                className="w-full bg-[#8EB5B0] hover:bg-[#7AA5A0] text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                disabled={loading}
+                className="w-full bg-[#8EB5B0] hover:bg-[#7AA5A0] text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                <span>Submit Leave Request</span>
+                <span>{loading ? 'Submitting...' : 'Submit Leave Request'}</span>
                 <ArrowRight size={18} />
               </button>
 

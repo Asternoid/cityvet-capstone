@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import API from '../../api/axios';
 import { 
   Calendar, 
   CalendarDays, 
@@ -55,7 +56,8 @@ const StatusBadge = ({ status }) => {
  */
 const Sidebar = ({ activeTab, setActiveTab }) => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const displayName = user?.full_name || user?.fullName || user?.email || 'Technician';
   const menuItems = [
     { id: 'Dashboard', icon: CalendarDays, label: 'Dashboard' },
     { id: 'Appointments', icon: Calendar, label: 'Appointments' },
@@ -113,10 +115,10 @@ const Sidebar = ({ activeTab, setActiveTab }) => {
       <div className="p-4 border-t border-gray-100">
         <div className="flex items-center gap-3 mb-4 px-2">
           <div className="w-10 h-10 rounded-full bg-[#1C5B56] text-white flex items-center justify-center font-bold text-sm">
-            JD
+            {displayName.slice(0, 2).toUpperCase()}
           </div>
           <div className="flex flex-col text-left">
-            <span className="text-sm font-bold text-gray-700">Juan dela Cruz</span>
+            <span className="text-sm font-bold text-gray-700">{displayName}</span>
             <span className="text-[11px] text-gray-500">Veterinary Technician</span>
           </div>
         </div>
@@ -187,9 +189,36 @@ function AppointmentsView() {
   const [activeTab, setActiveTab] = useState('Appointments');
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState([]);
+  const [error, setError] = useState(null);
+  const { user } = useAuth();
 
   // Filter states based on image UI
   const [selectedFilter, setSelectedFilter] = useState('All');
+  const [updatingId, setUpdatingId] = useState(null);
+
+  const updateStatus = async (appointment, newStatus) => {
+    setUpdatingId(appointment.id);
+    setError(null);
+    try {
+      const response = await API.patch(`/appointments/${appointment.id}/status`, { newStatus });
+      const updated = response.data?.data;
+      setAppointments((current) => current.map((item) => item.id === appointment.id
+        ? {
+          ...item,
+          statusCode: updated?.status || newStatus,
+          status: newStatus === 'technician_confirmed' ? 'Technician Confirmed'
+            : newStatus === 'in_progress' ? 'In Progress'
+              : newStatus === 'completed' ? 'Completed'
+                : newStatus === 'no_show' ? 'No-Show'
+                  : 'Pending Confirmation',
+        }
+        : item));
+    } catch (statusError) {
+      setError(statusError.response?.data?.error || 'Unable to update this appointment.');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   /*
    * ============================================================
@@ -226,19 +255,44 @@ function AppointmentsView() {
    * ============================================================
    */
 
-  // Mock Data Fetch with NO Pre-Built Data (Starts empty)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      
-      // IN A REAL APP: Replace this block with fetch('api/appointments').then(...)
-      // For demonstration, we load an empty array to keep it professional and blank.
-      setAppointments([]); 
-      setLoading(false);
+    let active = true;
+    const loadAppointments = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await API.get('/technicians/queue/today');
+        const queue = Array.isArray(response.data?.data) ? response.data.data : [];
+        if (!active) return;
+        setAppointments(queue.map((appointment) => ({
+          id: appointment.id,
+          name: appointment.client_profiles?.full_name || 'Client',
+          service: appointment.services?.name || 'Veterinary service',
+          location: appointment.barangays?.name || 'Assigned barangay',
+          time: appointment.preferred_time,
+          statusCode: appointment.status,
+          status: appointment.status === 'pending_technician_confirmation'
+            ? 'Pending Confirmation'
+            : appointment.status === 'technician_confirmed' ? 'Technician Confirmed'
+              : appointment.status === 'in_progress' ? 'In Progress'
+                : appointment.status === 'completed' ? 'Completed'
+                  : appointment.status === 'no_show' ? 'No-Show' : appointment.status,
+          borderColor: appointment.urgency_flag ? '#D99B4D' : '#5BC2C1',
+        })));
+      } catch (loadError) {
+        if (active) setError('Unable to load assigned appointments. Please try again.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    if (user?.id) loadAppointments();
+    return () => { active = false; };
+  }, [user?.id]);
 
-    }, 1800); // Shows skeleton for 1.8 seconds
-
-    return () => clearTimeout(timer);
-  }, []);
+  const filteredAppointments = appointments.filter((appointment) => {
+    if (selectedFilter === 'All') return true;
+    return appointment.status === selectedFilter || (selectedFilter === 'Pending' && appointment.status === 'Pending Confirmation');
+  });
 
   return (
     <div className="min-h-screen bg-[#F5F7F6] font-sans flex">
@@ -256,8 +310,10 @@ function AppointmentsView() {
             {/* Header */}
             <div className="mb-6">
               <h1 className="text-2xl font-bold text-gray-800">Assigned Appointments</h1>
-              <p className="text-gray-400 text-sm mt-1">8 of 8 appointments</p>
+              <p className="text-gray-400 text-sm mt-1">{filteredAppointments.length} appointment{filteredAppointments.length === 1 ? '' : 's'} today</p>
             </div>
+
+            {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
             {/* Status Filter Chips */}
             <div className="flex gap-3 mb-6 overflow-x-auto pb-2 scrollbar-hide">
@@ -276,32 +332,10 @@ function AppointmentsView() {
               ))}
             </div>
 
-            {/* Barangay & Date Dropdowns */}
-            <div className="flex flex-wrap gap-4 mb-8">
-              <div className="relative flex-1 min-w-[180px]">
-                <select className="w-full appearance-none bg-white border border-gray-200 text-gray-700 py-2.5 px-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C5B56] focus:border-transparent text-sm shadow-sm cursor-pointer">
-                  <option>All Barangays</option>
-                  <option>Brgy. Puntod</option>
-                  <option>Brgy. Kinabranan</option>
-                  <option>Brgy. Agay-ayan</option>
-                </select>
-                <ChevronDown size={16} className="absolute right-3 top-3 text-gray-400 pointer-events-none" />
-              </div>
-
-              <div className="relative flex-1 min-w-[150px]">
-                <select className="w-full appearance-none bg-white border border-gray-200 text-gray-700 py-2.5 px-4 pr-10 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1C5B56] focus:border-transparent text-sm shadow-sm cursor-pointer">
-                  <option>All Dates</option>
-                  <option>Today</option>
-                  <option>This Week</option>
-                </select>
-                <ChevronDown size={16} className="absolute right-3 top-3 text-gray-400 pointer-events-none" />
-              </div>
-            </div>
-
             {/* Appointment List */}
             <div className="space-y-4">
               
-              {appointments.length === 0 ? (
+              {filteredAppointments.length === 0 ? (
                 // Professional Empty State since we have no pre-built data
                 <div className="bg-white rounded-xl border border-gray-200 p-12 text-center shadow-sm">
                   <div className="w-16 h-16 mx-auto bg-gray-100 rounded-full flex items-center justify-center mb-4">
@@ -312,7 +346,7 @@ function AppointmentsView() {
                 </div>
               ) : (
                 /* Standard Appointment Cards (Rendered if data exists) */
-                appointments.map((appt) => (
+                filteredAppointments.map((appt) => (
                   <div 
                     key={appt.id} 
                     className="flex items-center justify-between bg-white p-5 rounded-xl border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.03)] border-l-[6px] hover:shadow-md transition-all cursor-pointer group"
@@ -334,7 +368,22 @@ function AppointmentsView() {
                     </div>
                     <div className="flex items-center gap-4">
                       <StatusBadge status={appt.status} />
-                      <ChevronRight size={18} className="text-gray-300 group-hover:text-[#1C5B56] transition-colors" />
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {appt.statusCode === 'pending_technician_confirmation' && (
+                          <>
+                            <button type="button" disabled={updatingId === appt.id} onClick={() => updateStatus(appt, 'technician_confirmed')} className="rounded-md bg-[#1C5B56] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Confirm</button>
+                            <button type="button" disabled={updatingId === appt.id} onClick={() => updateStatus(appt, 'reassignment_needed')} className="rounded-md border border-[#D99B4D] px-3 py-1.5 text-xs font-semibold text-[#A87B45] disabled:opacity-50">Decline</button>
+                          </>
+                        )}
+                        {appt.statusCode === 'technician_confirmed' && <button type="button" disabled={updatingId === appt.id} onClick={() => updateStatus(appt, 'in_progress')} className="rounded-md bg-[#1C5B56] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Start</button>}
+                        {appt.statusCode === 'in_progress' && (
+                          <>
+                            <button type="button" disabled={updatingId === appt.id} onClick={() => updateStatus(appt, 'completed')} className="rounded-md bg-[#48BB78] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">Complete</button>
+                            <button type="button" disabled={updatingId === appt.id} onClick={() => updateStatus(appt, 'no_show')} className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50">No-show</button>
+                          </>
+                        )}
+                        <ChevronRight size={18} className="self-center text-gray-300 group-hover:text-[#1C5B56] transition-colors" />
+                      </div>
                     </div>
                   </div>
                 ))

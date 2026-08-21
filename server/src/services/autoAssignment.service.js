@@ -1,5 +1,31 @@
 import { supabaseAdmin } from '../config/supabase.js';
 
+export const validateBookingRequest = ({ preferredDate, service }) => {
+  if (!preferredDate) {
+    throw new Error('Preferred date is required.');
+  }
+
+  const selectedDate = new Date(`${preferredDate}T00:00:00`);
+  if (Number.isNaN(selectedDate.getTime())) {
+    throw new Error('Preferred date is invalid.');
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (selectedDate < today) {
+    throw new Error('Selected date cannot be in the past.');
+  }
+
+  const maxDays = service?.urgency_type === 'urgent' ? 3 : 14;
+  const diffInDays = Math.ceil((selectedDate - today) / (1000 * 60 * 60 * 24));
+
+  if (diffInDays > maxDays) {
+    const allowedWindow = service?.urgency_type === 'urgent' ? '3 days' : '14 days';
+    throw new Error(`Selected date exceeds the allowed booking window (${allowedWindow}).`);
+  }
+};
+
 export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, serviceId, barangayId, preferredDate, preferredTime, animalDescription, remarks = null }) => {
   const supabase = supabaseClient;
 
@@ -11,6 +37,8 @@ export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, se
     .single();
 
   if (serviceErr || !service) throw new Error('Invalid service selected.');
+
+  validateBookingRequest({ preferredDate, service });
 
   const isUrgent = service.urgency_type === 'urgent';
 

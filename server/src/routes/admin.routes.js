@@ -18,6 +18,8 @@ import {
 	broadcastAdminNotification,
 	getAdminAnalytics,
 	generateAdminReport,
+	getReassignmentQueue,
+	resolveAppointmentReassignment,
 } from '../controllers/admin.controller.js';
 
 const router = express.Router();
@@ -39,6 +41,8 @@ router.delete('/blackout-dates/:id', deleteBlackoutDate);
 router.get('/notifications', listAdminNotifications);
 router.post('/notifications/broadcast', broadcastAdminNotification);
 router.get('/analytics', getAdminAnalytics);
+router.get('/reassignment-queue', getReassignmentQueue);
+router.post('/appointments/:id/reassign', resolveAppointmentReassignment);
 router.post('/reports/generate', generateAdminReport);
 
 export default router;

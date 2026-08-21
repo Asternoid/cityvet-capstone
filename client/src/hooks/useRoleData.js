@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import API from '../api/axios';
 
 const APPOINTMENT_SELECT = `
   id, reference_no, client_id, service_id, technician_id, barangay_id,
@@ -40,15 +41,16 @@ export default function useRoleData({ includeAllAppointments = false } = {}) {
     setLoading(true);
     setError(null);
     try {
+      const isClient = user.role === 'client' && !includeAllAppointments;
       let appointmentQuery = supabase.from('appointments').select(APPOINTMENT_SELECT).order('preferred_date', { ascending: true });
-      if (!includeAllAppointments) {
-        appointmentQuery = user.role === 'technician'
-          ? appointmentQuery.eq('technician_id', user.id)
-          : appointmentQuery.eq('client_id', user.id);
-      }
+      if (!includeAllAppointments && user.role === 'technician') appointmentQuery = appointmentQuery.eq('technician_id', user.id);
+
+      const appointmentRequest = isClient
+        ? API.get('/appointments/my')
+        : appointmentQuery;
 
       const [appointmentResult, servicesResult, barangaysResult, techniciansResult, clientsResult] = await Promise.all([
-        appointmentQuery,
+        appointmentRequest,
         supabase.from('services').select('id, name, urgency_type, allows_followup, allows_client_followup, is_active').eq('is_active', true).order('name'),
         supabase.from('barangays').select('id, name, is_covered').order('name'),
         supabase.from('technician_profiles').select('id, full_name, contact_number, account_status, availability_status'),
@@ -63,12 +65,16 @@ export default function useRoleData({ includeAllAppointments = false } = {}) {
       const technicians = new Map((techniciansResult.data || []).map((item) => [item.id, item]));
       const barangays = new Map((barangaysResult.data || []).map((item) => [item.id, item]));
 
+      const appointmentRows = isClient ? appointmentResult.data?.data || [] : appointmentResult.data || [];
       setData({
         services: servicesResult.data || [],
         barangays: barangaysResult.data || [],
         technicians: techniciansResult.data || [],
         clients: clientsResult.data || [],
-        appointments: (appointmentResult.data || []).map((row) => toAppointment(row, services, clients, technicians, barangays)),
+        appointments: appointmentRows.map((row) => toAppointment({
+          ...row,
+          status: row.status_code || row.status,
+        }, services, clients, technicians, barangays)),
         notifications: [],
       });
     } catch (loadError) {

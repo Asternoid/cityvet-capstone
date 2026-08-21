@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '../config/supabase.js';
+import { analyzeFeedbackNLP } from '../services/nlp.service.js';
 
 // POST /api/feedback/submit
 export const submitFeedback = async (req, res, next) => {
@@ -13,7 +14,6 @@ export const submitFeedback = async (req, res, next) => {
       });
     }
 
-    // Get appointment info
     const { data: apt, error: appointmentError } = await supabaseAdmin
       .from('appointments')
       .select('client_id, technician_id, status')
@@ -41,7 +41,6 @@ export const submitFeedback = async (req, res, next) => {
       });
     }
 
-    // Check if feedback already exists
     const { data: existingFeedback } = await supabaseAdmin
       .from('feedback')
       .select('id')
@@ -55,12 +54,24 @@ export const submitFeedback = async (req, res, next) => {
       });
     }
 
-    // NLP is temporarily paused.
-    // Sentiment and themes will be analyzed later.
-    const sentiment = null;
-    const themes = [];
+    let analysis = { sentiment: 'neutral', themes: ['general_service'] };
 
-    // Save feedback
+    try {
+      analysis = await analyzeFeedbackNLP(feedbackText);
+    } catch (err) {
+      analysis = {
+        sentiment: 'neutral',
+        themes: ['general_service'],
+        status: 'fallback',
+        message: 'Fallback analysis triggered after NLP error.'
+      };
+    }
+
+    const sentiment = analysis?.sentiment || 'neutral';
+    const themes = Array.isArray(analysis?.themes) && analysis.themes.length
+      ? analysis.themes
+      : ['general_service'];
+
     const { data: newFeedback, error } = await supabaseAdmin
       .from('feedback')
       .insert([{

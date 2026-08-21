@@ -41,18 +41,20 @@ const createMockSupabase = ({ service, maps, leavesMap, appointmentCounts }) => 
 };
 
 (async () => {
+  const futureDate = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
   const mockSupabase = createMockSupabase({
     service: { id: 1, urgency_type: 'routine' },
     maps: [{ technician_id: 'tech-1', is_primary: true }],
     leavesMap: {},
-    appointmentCounts: { 'tech-1': { '2026-08-20': 2 } }
+    appointmentCounts: { 'tech-1': { [futureDate]: 2 } }
   });
 
   const params = {
     clientId: 'client-1',
     serviceId: 1,
     barangayId: 10,
-    preferredDate: '2026-08-20',
+    preferredDate: futureDate,
     preferredTime: '09:00 AM',
     animalDescription: 'small dog'
   };
@@ -64,7 +66,7 @@ const createMockSupabase = ({ service, maps, leavesMap, appointmentCounts }) => 
     const result = await runAutoAssignmentWithClient(mockSupabase, params);
     console.log('Auto-assignment result:', result);
     assert.strictEqual(result.technician_id, 'tech-1');
-    assert.strictEqual(result.estimated_service_date, '2026-08-20');
+    assert.strictEqual(result.estimated_service_date, futureDate);
     console.log('Auto-assignment test passed');
     process.exit(0);
   } catch (err) {

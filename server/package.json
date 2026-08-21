@@ -4,7 +4,7 @@
   "type": "module",
   "main": "src/app.js",
   "scripts": {
-    "test": "node tests/test_nlp.js && node tests/test_autoAssignment.js"
+    "test": "node tests/test_nlp.js && node tests/test_autoAssignment.js && node tests/test_booking_rules.js && node tests/test_reassignment.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.0.0",
