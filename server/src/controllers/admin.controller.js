@@ -143,22 +143,23 @@ export const getAdminDashboard = async (req, res, next) => {
   try {
     const today = new Date().toISOString().slice(0, 10);
     const monthStart = `${today.slice(0, 8)}01`;
-    const [appointments, technicians, clients, pendingClients, todayAppointments] = await Promise.all([
+    const [appointments, technicians, clients, monthlyAppointments, pendingAssignments, activeCases, pendingClients, todayAppointments] = await Promise.all([
       supabaseAdmin.from('appointments').select('id, reference_no, status, preferred_date, preferred_time, created_at, client_profiles(full_name), services(name)').order('created_at', { ascending: false }).limit(8),
       supabaseAdmin.from('technician_profiles').select('id, availability_status, account_status'),
       supabaseAdmin.from('client_profiles').select('id, account_status'),
+      supabaseAdmin.from('appointments').select('id', { count: 'exact', head: true }).gte('created_at', `${monthStart}T00:00:00.000Z`),
+      supabaseAdmin.from('appointments').select('id', { count: 'exact', head: true }).eq('status', 'pending_technician_confirmation'),
+      supabaseAdmin.from('appointments').select('id', { count: 'exact', head: true }).in('status', ['technician_confirmed', 'in_progress']),
       supabaseAdmin.from('client_profiles').select('id', { count: 'exact', head: true }).eq('verification_status', 'pending'),
       supabaseAdmin.from('appointments').select('id', { count: 'exact', head: true }).eq('preferred_date', today),
     ]);
-    const firstError = [appointments, technicians, clients, pendingClients, todayAppointments].find((result) => result.error)?.error;
+    const firstError = [appointments, technicians, clients, monthlyAppointments, pendingAssignments, activeCases, pendingClients, todayAppointments].find((result) => result.error)?.error;
     if (firstError) throw firstError;
-    const monthAppointments = (appointments.data || []).filter((item) => item.created_at >= `${monthStart}T00:00:00.000Z`);
-    const activeStatuses = ['technician_confirmed', 'in_progress'];
     res.json({ success: true, data: {
       stats: {
-        totalAppointments: monthAppointments.length,
-        pendingAssignments: (appointments.data || []).filter((item) => item.status === 'pending_technician_confirmation').length,
-        activeCases: (appointments.data || []).filter((item) => activeStatuses.includes(item.status)).length,
+        totalAppointments: monthlyAppointments.count || 0,
+        pendingAssignments: pendingAssignments.count || 0,
+        activeCases: activeCases.count || 0,
         upcomingToday: todayAppointments.count || 0,
         availableTechnicians: (technicians.data || []).filter((item) => item.account_status === 'active' && item.availability_status === 'available').length,
         totalTechnicians: (technicians.data || []).length,
@@ -222,7 +223,7 @@ export const listAdminClients = async (req, res, next) => {
     const { data, error } = await query;
     if (error) throw error;
     const search = String(req.query.search || '').trim().toLowerCase();
-    const rows = (data || []).map((item) => ({ ...item, barangay: item.barangays?.name || 'Unknown' })).filter((item) => !search || item.full_name.toLowerCase().includes(search) || item.contact_number.toLowerCase().includes(search));
+    const rows = (data || []).map((item) => ({ ...item, barangay: item.barangays?.name || 'Unknown' })).filter((item) => !search || String(item.full_name || '').toLowerCase().includes(search) || String(item.contact_number || '').toLowerCase().includes(search));
     res.json({ success: true, data: rows, meta: { count: rows.length } });
   } catch (err) { next(err); }
 };

@@ -29,8 +29,9 @@ const CURRENT_USER = {
 
 export default function BlackoutDates() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [currentMonth, setCurrentMonth] = useState(7); // 0-indexed (August = 7)
-  const [currentYear, setCurrentYear] = useState(2025);
+  const today = new Date();
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
+  const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form, setForm] = useState({ date: '', reason: '' });
   

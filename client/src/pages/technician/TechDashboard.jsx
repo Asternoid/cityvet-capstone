@@ -48,6 +48,14 @@ const StatusBadge = ({ status }) => {
   return <span className={classes}>{status}</span>;
 };
 
+const STATUS_LABELS = {
+  pending_technician_confirmation: 'Pending Confirmation',
+  technician_confirmed: 'Technician Confirmed',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  no_show: 'No-Show',
+};
+
 /**
  * ============================================================
  * COMPONENT: Sidebar
@@ -248,14 +256,14 @@ function App() {
           service: appointment.services?.name || 'Veterinary service',
           location: appointment.barangays?.name || 'Assigned barangay',
           time: appointment.preferred_time,
-          status: appointment.status === 'pending_technician_confirmation' ? 'Pending Confirmation' : appointment.status.replaceAll('_', ' '),
+          status: STATUS_LABELS[appointment.status] || appointment.status,
           borderColor: appointment.urgency_flag ? 'border-l-[#D99B4D]' : 'border-l-[#5BC2C1]',
         })));
         setStats([
           { label: 'Pending', count: queue.filter((item) => item.status === 'pending_technician_confirmation').length },
           { label: 'Confirmed', count: queue.filter((item) => item.status === 'technician_confirmed').length },
           { label: 'In Progress', count: queue.filter((item) => item.status === 'in_progress').length },
-          { label: 'Done', count: 0 },
+          { label: 'Done', count: queue.filter((item) => item.status === 'completed').length },
         ]);
       } catch (loadError) {
         if (active) setError('Unable to load today\'s appointments. Please try again.');

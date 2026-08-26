@@ -80,7 +80,7 @@ export default function HomeDashboard() {
       {/* Welcome Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-[#13534D]">
-          Welcome Back, <span className="text-[#0B3A36]">{user?.fullName || 'Client'}</span>
+          Welcome Back, <span className="text-[#0B3A36]">{user?.full_name || user?.fullName || user?.email || 'Client'}</span>
         </h1>
         <p className="mt-2 text-lg text-gray-700">{today} · Gingoog City</p>
       </div>
