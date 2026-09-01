@@ -26,6 +26,18 @@ export const validateBookingRequest = ({ preferredDate, service }) => {
   }
 };
 
+// Reject dates that the office has declared unavailable before routing work.
+export const validateBlackoutDate = async (supabase, preferredDate) => {
+  const { data, error } = await supabase
+    .from('blackout_dates')
+    .select('id, reason')
+    .eq('date', preferredDate)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (data) throw new Error(`The selected date is unavailable: ${data.reason || 'office blackout date'}.`);
+};
+
 export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, serviceId, barangayId, preferredDate, preferredTime, animalDescription, remarks = null }) => {
   const supabase = supabaseClient;
 
@@ -39,6 +51,7 @@ export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, se
   if (serviceErr || !service) throw new Error('Invalid service selected.');
 
   validateBookingRequest({ preferredDate, service });
+  await validateBlackoutDate(supabase, preferredDate);
 
   const isUrgent = service.urgency_type === 'urgent';
 
@@ -49,9 +62,10 @@ export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, se
     .eq('barangay_id', barangayId)
     .order('is_primary', { ascending: false });
 
+  if (mapErr) throw mapErr;
   const candidateList = (maps || []).map(m => m.technician_id);
 
-  // 3. Step 2 & 3: Handle Urgent vs Routine
+  // 3. Check all candidates against leave and daily workload before assignment.
   let assignedTechId = null;
   let estimatedDate = preferredDate;
   let initialStatus = 'pending_technician_confirmation';
@@ -76,12 +90,12 @@ export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, se
         continue; // try next day
       }
 
-      // Capacity check
+      // Capacity is based on the actual scheduled date, not merely the client's preference.
       const { count } = await supabase
         .from('appointments')
         .select('id', { count: 'exact', head: true })
         .eq('technician_id', candidateId)
-        .eq('preferred_date', currentDateStr)
+        .eq('estimated_service_date', currentDateStr)
         .not('status', 'in', '("cancelled","no_show")');
 
       if ((count || 0) < 6) {
@@ -94,33 +108,18 @@ export const runAutoAssignmentWithClient = async (supabaseClient, { clientId, se
     return null;
   };
 
-  if (isUrgent) {
-    // Urgent: try primary mapped tech(s) and set estimated_date to today
-    if (candidateList.length > 0) {
-      assignedTechId = candidateList[0];
-      estimatedDate = new Date().toISOString().slice(0, 10);
-    } else {
-      initialStatus = 'reassignment_needed';
-    }
+  if (!candidateList.length) {
+    initialStatus = 'reassignment_needed';
   } else {
-    if (!candidateList || candidateList.length === 0) {
-      initialStatus = 'reassignment_needed';
-    } else {
-      let found = false;
-      for (const cand of candidateList) {
-        const availableDate = await tryCandidate(cand);
-        if (availableDate) {
-          assignedTechId = cand;
-          estimatedDate = availableDate;
-          found = true;
-          break;
-        }
-      }
-
-      if (!found) {
-        initialStatus = 'reassignment_needed';
+    for (const cand of candidateList) {
+      const availableDate = await tryCandidate(cand);
+      if (availableDate) {
+        assignedTechId = cand;
+        estimatedDate = availableDate;
+        break;
       }
     }
+    if (!assignedTechId) initialStatus = 'reassignment_needed';
   }
 
   // 4. Generate Reference Number

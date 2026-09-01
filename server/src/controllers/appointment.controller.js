@@ -1,4 +1,4 @@
-import { runAutoAssignment, validateBookingRequest } from '../services/autoAssignment.service.js';
+import { runAutoAssignment, validateBookingRequest, validateBlackoutDate } from '../services/autoAssignment.service.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { sendInAppNotification, sendEmailNotification } from '../services/notification.service.js';
 
@@ -97,11 +97,12 @@ export const submitBooking = async (req, res, next) => {
 
     const { data: clientProfile, error: profileError } = await supabaseAdmin
       .from('client_profiles')
-      .select('barangay_id')
+      .select('barangay_id, verification_status, account_status')
       .eq('id', clientId)
       .maybeSingle();
 
-    if (profileError || !clientProfile?.barangay_id) {
+    // Only verified, active residents may create a government service request.
+    if (profileError || !clientProfile?.barangay_id || clientProfile.verification_status !== 'verified' || clientProfile.account_status !== 'active') {
       return res.status(400).json({ success: false, error: 'A verified service address is required before booking.' });
     }
 
@@ -168,6 +169,11 @@ export const updateAppointmentStatus = async (req, res, next) => {
     };
     if (!allowedTransitions[current.status]?.includes(newStatus)) {
       return res.status(400).json({ success: false, error: `Cannot change status from ${current.status} to ${newStatus}.` });
+    }
+
+    // A technician decline must explain why the appointment needs reassignment.
+    if (newStatus === 'reassignment_needed' && !notes?.trim()) {
+      return res.status(400).json({ success: false, error: 'A reason is required when declining an appointment.' });
     }
 
     const updateFields = {
@@ -287,67 +293,56 @@ export const rescheduleAppointment = async (req, res, next) => {
     if (!newDate || !newTime) return res.status(400).json({ success: false, error: 'newDate and newTime are required.' });
 
     const { data: appointment, error: fetchErr } = await supabaseAdmin
-      .from('appointments')
-      .select('*')
-      .eq('id', id)
-      .single();
-
+      .from('appointments').select('*').eq('id', id).single();
     if (fetchErr || !appointment) return res.status(404).json({ success: false, error: 'Appointment not found.' });
+    if (appointment.client_id !== userId) return res.status(403).json({ success: false, error: 'You do not own this appointment.' });
+    if (['completed', 'cancelled', 'no_show'].includes(appointment.status)) return res.status(400).json({ success: false, error: 'Cannot reschedule an appointment in its current state.' });
 
-    if (appointment.client_id !== userId) {
-      return res.status(403).json({ success: false, error: 'You do not own this appointment.' });
+    const { data: service, error: serviceError } = await supabaseAdmin
+      .from('services').select('*').eq('id', appointment.service_id).maybeSingle();
+    if (serviceError || !service) return res.status(400).json({ success: false, error: 'The appointment service is no longer available.' });
+    try {
+      validateBookingRequest({ preferredDate: newDate, service });
+      await validateBlackoutDate(supabaseAdmin, newDate);
+    } catch (validationError) {
+      return res.status(400).json({ success: false, error: validationError.message });
     }
 
-    if (['completed', 'cancelled', 'no_show'].includes(appointment.status)) {
-      return res.status(400).json({ success: false, error: 'Cannot reschedule an appointment in its current state.' });
-    }
+    // Re-route the request as a new appointment so every booking rule is enforced.
+    const { data: clientProfile, error: profileError } = await supabaseAdmin
+      .from('client_profiles').select('barangay_id').eq('id', userId).maybeSingle();
+    if (profileError || !clientProfile?.barangay_id) return res.status(400).json({ success: false, error: 'A verified service address is required before rescheduling.' });
 
-    // Update appointment to pending and clear current technician assignment for re-routing
+    const routingResult = await runAutoAssignment({
+      clientId: userId,
+      serviceId: appointment.service_id,
+      barangayId: clientProfile.barangay_id,
+      preferredDate: newDate,
+      preferredTime: newTime,
+      animalDescription: appointment.animal_description,
+      remarks: appointment.remarks,
+    });
+
+    // Keep the old record for auditability, but cancel it after replacement succeeds.
     const { data: updated, error: updateErr } = await supabaseAdmin
       .from('appointments')
-      .update({
-        preferred_date: newDate,
-        preferred_time: newTime,
-        technician_id: null,
-        estimated_service_date: null,
-        status: 'pending_technician_confirmation'
-      })
-      .eq('id', id)
-      .select()
-      .single();
-
+      .update({ status: 'cancelled', cancellation_reason: `Rescheduled as ${routingResult.reference_no}` })
+      .eq('id', id).select().single();
     if (updateErr) throw updateErr;
 
     await supabaseAdmin.from('appointment_status_logs').insert([{
       appointment_id: id,
       old_status: appointment.status,
-      new_status: 'pending_technician_confirmation',
+      new_status: 'cancelled',
       changed_by: userId,
-      notes: `Reschedule requested to ${newDate} ${newTime}`
+      notes: `Rescheduled as ${routingResult.reference_no} for ${newDate} ${newTime}`
     }]);
 
-    // Notify client
-    await sendInAppNotification(
-      userId,
-      'Reschedule Received',
-      `Your reschedule request for ${appointment.reference_no} to ${newDate} ${newTime} is pending assignment.`,
-      'appointment',
-      id
-    );
+    await sendInAppNotification(userId, 'Appointment Rescheduled', `Your appointment was rescheduled. New reference: ${routingResult.reference_no}.`, 'appointment', routingResult.id);
+    if (appointment.technician_id) await sendInAppNotification(appointment.technician_id, 'Appointment Cancelled', `Appointment ${appointment.reference_no} was rescheduled by the client.`, 'appointment', id);
+    if (routingResult.technician_id) await sendInAppNotification(routingResult.technician_id, 'New Service Assignment', `New booking assigned (${routingResult.reference_no}). Please review and confirm.`, 'appointment', routingResult.id);
 
-    // Notify Admins (simple broadcast placeholder)
-    // In a production system we'd target admin users; here we insert a system notification without a recipient as a placeholder
-    await supabaseAdmin.from('notifications').insert([
-      {
-        recipient_id: null,
-        title: 'Reschedule Requested',
-        message: `Reschedule requested for ${appointment.reference_no} to ${newDate} ${newTime}`,
-        type: 'appointment',
-        related_appointment_id: id
-      }
-    ]);
-
-    res.status(200).json({ success: true, data: updated });
+    res.status(200).json({ success: true, data: { cancelledAppointment: updated, rescheduledAppointment: routingResult } });
   } catch (err) {
     next(err);
   }

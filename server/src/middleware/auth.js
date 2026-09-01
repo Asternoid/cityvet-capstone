@@ -15,15 +15,12 @@ export const verifyToken = async (req, res, next) => {
       return res.status(401).json({ success: false, error: 'Invalid or expired token' });
     }
 
-    // Resolve the application role from trusted metadata or role-specific profiles.
+    // Resolve the application role from server-controlled sources only.
     let role = null;
 
-    // Supabase's built-in user.role is usually "authenticated", not an
-    // application role, so never use it for authorization decisions.
-    if (!role) {
-      const metadataRole = user.user_metadata?.role || user.app_metadata?.role;
-      if (['client', 'technician', 'admin'].includes(metadataRole)) role = metadataRole;
-    }
+    // user_metadata is user-editable, so it must never grant CityVet permissions.
+    const metadataRole = user.app_metadata?.role;
+    if (['client', 'technician', 'admin'].includes(metadataRole)) role = metadataRole;
 
     // Older accounts may not have an application role in metadata.
     if (!role) {
@@ -45,10 +42,8 @@ export const verifyToken = async (req, res, next) => {
       }
     }
 
-    if (!role) {
-      // If role is still missing, default to 'client' but allow access only to limited routes downstream
-      role = 'client';
-    }
+    // Accounts without a profile are denied instead of being treated as clients.
+    if (!role) return res.status(403).json({ success: false, error: 'No authorized CityVet role is assigned to this account.' });
 
     req.user = {
       id: user.id,

@@ -238,6 +238,33 @@ export const updateClientAccountStatus = async (req, res, next) => {
   } catch (err) { next(err); }
 };
 
+// POST /api/admin/leave-requests/:id/approve
+export const approveLeaveRequest = async (req, res, next) => {
+  try {
+    const { data: leaveRequest, error: fetchError } = await supabaseAdmin
+      .from('leave_requests').select('*').eq('id', req.params.id).maybeSingle();
+    if (fetchError || !leaveRequest) return res.status(404).json({ success: false, error: 'Leave request not found.' });
+    if (leaveRequest.status !== 'pending') return res.status(409).json({ success: false, error: 'Only pending leave requests can be approved.' });
+
+    // Approval activates reassignment-queue filtering; no appointment is silently reassigned.
+    const { data, error } = await supabaseAdmin
+      .from('leave_requests')
+      .update({ status: 'confirmed', approved_by: req.user.id, approved_at: new Date().toISOString() })
+      .eq('id', leaveRequest.id).select().single();
+    if (error) throw error;
+
+    const { count, error: countError } = await supabaseAdmin
+      .from('appointments').select('id', { count: 'exact', head: true })
+      .eq('technician_id', leaveRequest.technician_id)
+      .gte('estimated_service_date', leaveRequest.start_date)
+      .lte('estimated_service_date', leaveRequest.end_date)
+      .in('status', ['pending_technician_confirmation', 'technician_confirmed', 'in_progress']);
+    if (countError) throw countError;
+
+    await sendInAppNotification(leaveRequest.technician_id, 'Leave Request Approved', 'Your leave request has been approved. Affected appointments will be reviewed for reassignment.', 'system');
+    res.json({ success: true, data, meta: { affectedAppointments: count || 0 } });
+  } catch (err) { next(err); }
+};
 export const listBlackoutDates = async (req, res, next) => {
   try {
     let query = supabaseAdmin.from('blackout_dates').select('id, date, reason, created_by, created_at').order('date');
@@ -251,15 +278,26 @@ export const listBlackoutDates = async (req, res, next) => {
 
 export const createBlackoutDate = async (req, res, next) => {
   try {
-    const { date, reason } = req.body;
+    const { date, reason, confirmAffected = false } = req.body;
     if (!date || !reason?.trim()) return res.status(400).json({ success: false, error: 'date and reason are required.' });
+
+    // Require an explicit confirmation before a blackout disrupts active appointments.
+    const { data: affected, error: affectedError } = await supabaseAdmin
+      .from('appointments')
+      .select('id, reference_no, client_id, technician_id, status')
+      .eq('estimated_service_date', date)
+      .in('status', ['pending_technician_confirmation', 'technician_confirmed', 'in_progress']);
+    if (affectedError) throw affectedError;
+    if (affected?.length && !confirmAffected) {
+      return res.status(409).json({ success: false, error: 'Active appointments are affected. Confirm the blackout to continue.', data: { affectedAppointments: affected } });
+    }
+
     const { data, error } = await supabaseAdmin.from('blackout_dates').insert({ date, reason: reason.trim(), created_by: req.user.id }).select().single();
     if (error?.code === '23505') return res.status(409).json({ success: false, error: 'That date is already unavailable.' });
     if (error) throw error;
-    res.status(201).json({ success: true, data });
+    res.status(201).json({ success: true, data, meta: { affectedAppointments: affected?.length || 0 } });
   } catch (err) { next(err); }
 };
-
 export const deleteBlackoutDate = async (req, res, next) => {
   try {
     const { error } = await supabaseAdmin.from('blackout_dates').delete().eq('id', req.params.id);

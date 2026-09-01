@@ -5,7 +5,8 @@ export const buildDailyQueue = async (technicianId, targetDate) => {
     .from('appointments')
     .select('*, client_profiles(full_name, contact_number), services(name), barangays(name)')
     .eq('technician_id', technicianId)
-    .eq('preferred_date', targetDate)
+    // Use the routed service date so roll-forward assignments appear on the correct daily queue.
+    .eq('estimated_service_date', targetDate)
     .in('status', ['pending_technician_confirmation', 'technician_confirmed', 'in_progress']);
 
   if (error) throw new Error(error.message);

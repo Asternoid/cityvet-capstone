@@ -20,6 +20,7 @@ import {
 	generateAdminReport,
 	getReassignmentQueue,
 	resolveAppointmentReassignment,
+	approveLeaveRequest,
 } from '../controllers/admin.controller.js';
 
 const router = express.Router();
@@ -35,6 +36,7 @@ router.patch('/clients/:id/account-status', updateClientAccountStatus);
 router.get('/clients/pending', getPendingClients);
 router.post('/clients/:id/verify', verifyClient);
 router.post('/clients/:id/reject', rejectClient);
+router.post('/leave-requests/:id/approve', approveLeaveRequest);
 router.get('/blackout-dates', listBlackoutDates);
 router.post('/blackout-dates', createBlackoutDate);
 router.delete('/blackout-dates/:id', deleteBlackoutDate);
