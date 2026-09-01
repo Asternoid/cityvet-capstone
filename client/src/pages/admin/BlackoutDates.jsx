@@ -1,50 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 import { 
-  Calendar as CalendarIcon, 
+  CalendarIcon, 
   UserCheck, 
   Plus, 
   X, 
   ChevronLeft, 
-  ChevronRight,
-  Menu,
-  LayoutDashboard,
-  CalendarCheck,
-  Users,
-  UserCog,
-  Bell,
-  FileText,
-  BarChart3,
-  LogOut
+  ChevronRight
 } from 'lucide-react';
+import AdminLayout from '../../components/common/AdminLayout';
 import useAdminData from '../../hooks/useAdminData';
 import API from '../../api/axios';
 
-// RBAC Simulation
-const CURRENT_USER = {
-  name: 'Administrator',
-  email: 'admin@cityvet.gov.ph',
-  role: 'admin'
-};
-
 export default function BlackoutDates() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const today = new Date();
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form, setForm] = useState({ date: '', reason: '' });
-  
-  // Close sidebar on resize to desktop
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setSidebarOpen(false);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, date: null, appointments: [] });
+  const [dateToDelete, setDateToDelete] = useState(null);
 
   const { data: blackoutDatesData, loading, error, reload } = useAdminData('/admin/blackout-dates');
   const blackoutDates = Array.isArray(blackoutDatesData) ? blackoutDatesData : [];
@@ -57,17 +31,38 @@ export default function BlackoutDates() {
     reload();
   };
 
-  // Navigation Menu Structure
-  const navigation = [
-    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard, current: false },
-    { name: 'Appointments', href: '/admin/appointments', icon: CalendarCheck, current: false },
-    { name: 'Technicians', href: '/admin/technicians', icon: UserCog, current: false },
-    { name: 'Clients', href: '/admin/clients', icon: Users, current: false },
-    { name: 'Blackout Dates', href: '/admin/blackout-dates', icon: CalendarIcon, current: true },
-    { name: 'Notifications', href: '/admin/notifications', icon: Bell, current: false },
-    { name: 'Reports', href: '/admin/reports', icon: FileText, current: false },
-    { name: 'Analytics', href: '/admin/analytics', icon: BarChart3, current: false },
-  ];
+  const checkAndDeleteBlackoutDate = async (item) => {
+    try {
+      const response = await API.get(`/admin/appointments?date=${item.date}`);
+      const appointments = response.data?.data || [];
+      
+      if (appointments.length > 0) {
+        setConfirmDialog({ 
+          open: true, 
+          date: item.date,
+          appointments: appointments 
+        });
+        setDateToDelete(item);
+      } else {
+        await API.delete(`/admin/blackout-dates/${item.id}`);
+        reload();
+      }
+    } catch (err) {
+      console.error('Error checking appointments:', err);
+      // If check fails, allow deletion anyway
+      await API.delete(`/admin/blackout-dates/${item.id}`);
+      reload();
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (dateToDelete) {
+      await API.delete(`/admin/blackout-dates/${dateToDelete.id}`);
+      reload();
+      setConfirmDialog({ open: false, date: null, appointments: [] });
+      setDateToDelete(null);
+    }
+  };
 
   // --- CALENDAR LOGIC ---
   const getDaysInMonth = (year, month) => {
@@ -186,234 +181,126 @@ export default function BlackoutDates() {
   );
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-700 font-sans overflow-hidden">
-      
-      {/* === OVERLAY MOBILE === */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/30 z-20 lg:hidden" 
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* === SIDEBAR === */}
-      <aside 
-        className={`
-          fixed inset-y-0 left-0 z-30 w-64 bg-emerald-900 text-slate-200 flex flex-col transition-transform duration-300 ease-in-out
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:static lg:z-auto
-        `}
-      >
-        {/* Brand */}
-        <div className="h-16 flex items-center px-6 border-b border-emerald-800/50 gap-3 flex-shrink-0">
-          <div className="bg-amber-500 h-8 w-8 rounded-lg flex items-center justify-center text-emerald-900 font-bold shadow-sm">
-            CV
-          </div>
-          <div>
-            <h1 className="font-bold text-white tracking-tight text-lg">CityVet</h1>
-            <p className="text-[10px] text-emerald-300/70 uppercase tracking-wider">Veterinary Services</p>
-          </div>
-        </div>
-
-        {/* Nav Links */}
-        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1.5">
-          {navigation.map((item) => (
-            <Link
-              key={item.name}
-              to={item.href}
-              className={`
-                flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors
-                ${item.current 
-                  ? 'bg-emerald-800/60 text-white shadow-sm' 
-                  : 'text-emerald-200/70 hover:bg-emerald-800/40 hover:text-white'
-                }
-              `}
-            >
-              <item.icon className="w-4 h-4 flex-shrink-0" />
-              {item.name}
-            </Link>
-          ))}
-        </nav>
-
-        {/* Sidebar Footer (User Profile) */}
-        <div className="p-4 border-t border-emerald-800/50 flex-shrink-0">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-9 h-9 rounded-full bg-emerald-700 flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
-              {CURRENT_USER.name.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">{CURRENT_USER.name}</p>
-              <p className="text-xs text-emerald-300/60 truncate">{CURRENT_USER.role}</p>
-            </div>
-            <button className="text-emerald-300/50 hover:text-white transition-colors flex-shrink-0">
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* === MAIN CONTENT AREA === */}
-      <main className="flex-1 flex flex-col min-h-screen lg:min-h-0 lg:h-screen overflow-hidden relative">
+    <AdminLayout pageTitle="Blackout Dates">
+      <div className="p-4 sm:p-6 lg:p-8">
         
-        {/* Top Header */}
-        <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200 h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 flex-shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Mobile Menu Button */}
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden text-slate-500 hover:text-slate-700 transition-colors p-1 flex-shrink-0"
-              aria-label="Toggle sidebar"
-            >
-              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
+        {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
+        {/* --- SKELETON LOADING STATE --- */}
+        {loading ? (
+          <div className="flex flex-col lg:flex-row gap-6">
+            <SkeletonCalendar />
+            <div className="w-full lg:w-80 flex flex-col gap-6">
+              <SkeletonBlackoutList />
+              <SkeletonInfoNote />
+            </div>
+          </div>
+        ) : (
+          /* --- ACTUAL CONTENT --- */
+          <div className="flex flex-col lg:flex-row gap-6 skeleton-fade-in">
             
-            <div className="min-w-0">
-              <h2 className="text-base sm:text-lg lg:text-xl font-bold text-slate-900 tracking-tight truncate">Blackout Dates</h2>
-              <p className="text-xs text-slate-500 hidden sm:block truncate">Manage dates when appointment scheduling is unavailable</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className="hidden sm:flex items-center gap-2 px-3 sm:px-4 py-2 bg-emerald-700 text-white text-sm font-medium rounded-lg hover:bg-emerald-800 transition-colors shadow-sm whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4 flex-shrink-0" />
-              <span className="hidden xs:inline">Add Blackout Date</span>
-              <span className="xs:hidden">Add</span>
-            </button>
-            <button className="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-lg transition-colors relative flex-shrink-0">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-            </button>
-          </div>
-        </header>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          
-          {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
-
-          {/* --- SKELETON LOADING STATE --- */}
-          {loading ? (
-            <div className="flex flex-col lg:flex-row gap-6">
-              <SkeletonCalendar />
-              <div className="w-full lg:w-80 flex flex-col gap-6">
-                <SkeletonBlackoutList />
-                <SkeletonInfoNote />
-              </div>
-            </div>
-          ) : (
-            /* --- ACTUAL CONTENT --- */
-            <div className="flex flex-col lg:flex-row gap-6 skeleton-fade-in">
+            {/* --- CALENDAR AREA --- */}
+            <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
               
-              {/* --- CALENDAR AREA --- */}
-              <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                
-                {/* Calendar Header */}
-                <div className="px-4 sm:px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-                  <button 
-                    onClick={() => changeMonth(-1)}
-                    className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <h3 className="font-semibold text-emerald-900 text-base sm:text-lg">
-                    {monthNames[currentMonth]} {currentYear}
-                  </h3>
-                  <button 
-                    onClick={() => changeMonth(1)}
-                    className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
+              {/* Calendar Header */}
+              <div className="px-4 sm:px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                <button 
+                  onClick={() => changeMonth(-1)}
+                  className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <h3 className="font-semibold text-emerald-900 text-base sm:text-lg">
+                  {monthNames[currentMonth]} {currentYear}
+                </h3>
+                <button 
+                  onClick={() => changeMonth(1)}
+                  className="p-1.5 rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Calendar Grid */}
+              <div className="p-4 sm:p-6">
+                {/* Days of Week Header */}
+                <div className="grid grid-cols-7 mb-2 text-center">
+                  {dayNames.map(day => (
+                    <div key={day} className="text-xs font-medium text-slate-500 py-2">{day}</div>
+                  ))}
+                </div>
+                {/* Days Grid */}
+                <div className="grid grid-cols-7 gap-y-1 gap-x-1">
+                  {renderCalendar()}
                 </div>
 
-                {/* Calendar Grid */}
-                <div className="p-4 sm:p-6">
-                  {/* Days of Week Header */}
-                  <div className="grid grid-cols-7 mb-2 text-center">
-                    {dayNames.map(day => (
-                      <div key={day} className="text-xs font-medium text-slate-500 py-2">{day}</div>
-                    ))}
+                {/* Calendar Legend */}
+                <div className="mt-8 pt-6 border-t border-slate-100 flex flex-wrap items-center gap-4 sm:gap-6 text-xs text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border border-slate-300 bg-white rounded-sm"></div>
+                    <span>Today</span>
                   </div>
-                  {/* Days Grid */}
-                  <div className="grid grid-cols-7 gap-y-1 gap-x-1">
-                    {renderCalendar()}
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border border-red-200 bg-red-50 rounded-sm"></div>
+                    <span>Blackout / Unavailable</span>
                   </div>
-
-                  {/* Calendar Legend */}
-                  <div className="mt-8 pt-6 border-t border-slate-100 flex flex-wrap items-center gap-4 sm:gap-6 text-xs text-slate-600">
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border border-slate-300 bg-white rounded-sm"></div>
-                      <span>Today</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border border-red-200 bg-red-50 rounded-sm"></div>
-                      <span>Blackout / Unavailable</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border border-slate-200 bg-white rounded-sm"></div>
-                      <span>Available</span>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 border border-slate-200 bg-white rounded-sm"></div>
+                    <span>Available</span>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* --- SIDEBAR LIST (Right Panel) --- */}
-              <div className="w-full lg:w-80 flex flex-col gap-6">
+            {/* --- SIDEBAR LIST (Right Panel) --- */}
+            <div className="w-full lg:w-80 flex flex-col gap-6">
+              
+              {/* Scheduled Blackout Dates List */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
+                <h4 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-3 text-sm sm:text-base">Scheduled Blackout Dates</h4>
                 
-                {/* Scheduled Blackout Dates List */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6">
-                  <h4 className="font-semibold text-slate-800 mb-4 border-b border-slate-100 pb-3 text-sm sm:text-base">Scheduled Blackout Dates</h4>
-                  
-                  {blackoutDates.length ? (
-                    <ul className="space-y-4 divide-y divide-slate-100">
-                      {blackoutDates.map((item) => (
-                        <li key={item.id} className="pt-4 first:pt-0 flex items-center justify-between group">
-                          <div>
-                            <p className="text-sm font-medium text-red-700">{item.date}</p>
-                            <p className="text-xs text-slate-400">{item.reason || 'Unavailable'}</p>
-                          </div>
-                          <button 
-                            onClick={async () => { 
-                              await API.delete(`/admin/blackout-dates/${item.id}`); 
-                              reload(); 
-                            }} 
-                            className="text-slate-300 hover:text-red-600 transition-colors p-1"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center py-10 text-center">
-                      <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3 text-slate-300">
-                        <CalendarIcon className="w-6 h-6" />
-                      </div>
-                      <p className="text-sm font-medium text-slate-600">No blackout dates</p>
-                      <p className="text-xs text-slate-400 mt-1 max-w-[200px]">Scheduled unavailable dates will appear here.</p>
+                {blackoutDates.length ? (
+                  <ul className="space-y-4 divide-y divide-slate-100">
+                    {blackoutDates.map((item) => (
+                      <li key={item.id} className="pt-4 first:pt-0 flex items-center justify-between group">
+                        <div>
+                          <p className="text-sm font-medium text-red-700">{item.date}</p>
+                          <p className="text-xs text-slate-400">{item.reason || 'Unavailable'}</p>
+                        </div>
+                        <button 
+                          onClick={() => checkAndDeleteBlackoutDate(item)}
+                          className="text-slate-300 hover:text-red-600 transition-colors p-1"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-10 text-center">
+                    <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mb-3 text-slate-300">
+                      <CalendarIcon className="w-6 h-6" />
                     </div>
-                  )}
-                </div>
+                    <p className="text-sm font-medium text-slate-600">No blackout dates</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-[200px]">Scheduled unavailable dates will appear here.</p>
+                  </div>
+                )}
+              </div>
 
-                {/* Info Note */}
-                <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-5">
-                  <h5 className="text-sm font-medium text-amber-800 mb-1">Note</h5>
-                  <p className="text-xs text-amber-700/80 leading-relaxed">
-                    Clients will be unable to schedule appointments on blackout dates. Existing appointments on these dates will not be automatically cancelled.
-                  </p>
-                </div>
-
+              {/* Info Note */}
+              <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-5">
+                <h5 className="text-sm font-medium text-amber-800 mb-1">Note</h5>
+                <p className="text-xs text-amber-700/80 leading-relaxed">
+                  Clients will be unable to schedule appointments on blackout dates. Existing appointments on these dates will not be automatically cancelled.
+                </p>
               </div>
 
             </div>
-          )}
 
-        </div>
-      </main>
+          </div>
+        )}
+
+      </div>
 
       {/* ================= ADD BLACKOUT DATE MODAL ================= */}
       {isModalOpen && (
@@ -480,6 +367,62 @@ export default function BlackoutDates() {
         </div>
       )}
 
+      {/* ================= CONFIRM DELETION DIALOG ================= */}
+      {confirmDialog.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <h2 className="text-xl font-bold text-red-900">Confirm Deletion</h2>
+              <button 
+                onClick={() => setConfirmDialog({ open: false, date: null, appointments: [] })}
+                className="p-1 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-4">
+              <p className="text-sm text-slate-700">
+                There are <strong>{confirmDialog.appointments.length}</strong> existing appointment(s) scheduled on <strong>{confirmDialog.date}</strong>:
+              </p>
+              
+              <div className="max-h-48 overflow-y-auto bg-slate-50 rounded-lg p-4 space-y-2">
+                {confirmDialog.appointments.map((apt, idx) => (
+                  <div key={idx} className="text-sm text-slate-600 border-l-2 border-amber-300 pl-3">
+                    <p className="font-medium">{apt.reference_no}</p>
+                    <p className="text-xs text-slate-500">{apt.client} • {apt.service}</p>
+                  </div>
+                ))}
+              </div>
+
+              <p className="text-xs text-red-600 font-medium">
+                Warning: Deleting this blackout date will not affect existing appointments. Are you sure?
+              </p>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/50">
+              <button 
+                onClick={() => setConfirmDialog({ open: false, date: null, appointments: [] })}
+                className="px-5 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
+              >
+                Keep Blackout Date
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="px-5 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+              >
+                Delete Anyway
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* Add global styles for skeleton loading */}
       <style jsx>{`
         @keyframes shimmer {
@@ -527,6 +470,6 @@ export default function BlackoutDates() {
           }
         }
       `}</style>
-    </div>
+    </AdminLayout>
   );
 }

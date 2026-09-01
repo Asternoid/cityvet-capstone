@@ -1,62 +1,22 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
 import { 
   Bell, 
   UserCheck, 
   Plus, 
   Inbox, 
-  Menu,
-  X,
-  LayoutDashboard,
-  CalendarCheck,
-  Users,
-  UserCog,
-  FileText,
-  BarChart3,
-  LogOut,
-  Calendar
+  X
 } from 'lucide-react';
+import AdminLayout from '../../components/common/AdminLayout';
 import useAdminData from '../../hooks/useAdminData';
 import API from '../../api/axios';
 
-// RBAC Simulation
-const CURRENT_USER = {
-  name: 'Administrator',
-  email: 'admin@cityvet.gov.ph',
-  role: 'admin'
-};
-
 export default function SystemNotifications() {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showComposeForm, setShowComposeForm] = useState(false);
   const [sendTo, setSendTo] = useState('All Users');
   const [form, setForm] = useState({ title: '', message: '' });
-  
-  // Close sidebar on resize to desktop
-  useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth >= 1024) {
-        setSidebarOpen(false);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   const { data: notificationsData, loading, error, reload } = useAdminData('/admin/notifications');
   const notifications = Array.isArray(notificationsData) ? notificationsData : [];
-
-  // Navigation Menu Structure
-  const navigation = [
-    { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard, current: false },
-    { name: 'Appointments', href: '/admin/appointments', icon: CalendarCheck, current: false },
-    { name: 'Technicians', href: '/admin/technicians', icon: UserCog, current: false },
-    { name: 'Clients', href: '/admin/clients', icon: Users, current: false },
-    { name: 'Blackout Dates', href: '/admin/blackout-dates', icon: Calendar, current: false },
-    { name: 'Notifications', href: '/admin/notifications', icon: Bell, current: true },
-    { name: 'Reports', href: '/admin/reports', icon: FileText, current: false },
-    { name: 'Analytics', href: '/admin/analytics', icon: BarChart3, current: false },
-  ];
 
   // Recipient options for dropdown
   const recipientOptions = ['All Users', 'All Clients', 'Verified Clients', 'All Technicians'];
@@ -124,112 +84,8 @@ export default function SystemNotifications() {
   );
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-700 font-sans overflow-hidden">
-      
-      {/* === OVERLAY MOBILE === */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/30 z-20 lg:hidden" 
-          onClick={() => setSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* === SIDEBAR === */}
-      <aside 
-        className={`
-          fixed inset-y-0 left-0 z-30 w-64 bg-emerald-900 text-slate-200 flex flex-col transition-transform duration-300 ease-in-out
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:static lg:z-auto
-        `}
-      >
-        {/* Brand */}
-        <div className="h-16 flex items-center px-6 border-b border-emerald-800/50 gap-3 flex-shrink-0">
-          <div className="bg-amber-500 h-8 w-8 rounded-lg flex items-center justify-center text-emerald-900 font-bold shadow-sm">
-            CV
-          </div>
-          <div>
-            <h1 className="font-bold text-white tracking-tight text-lg">CityVet</h1>
-            <p className="text-[10px] text-emerald-300/70 uppercase tracking-wider">Veterinary Services</p>
-          </div>
-        </div>
-
-        {/* Nav Links */}
-        <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1.5">
-          {navigation.map((item) => (
-            <Link
-              key={item.name}
-              to={item.href}
-              className={`
-                flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors
-                ${item.current 
-                  ? 'bg-emerald-800/60 text-white shadow-sm' 
-                  : 'text-emerald-200/70 hover:bg-emerald-800/40 hover:text-white'
-                }
-              `}
-            >
-              <item.icon className="w-4 h-4 flex-shrink-0" />
-              {item.name}
-            </Link>
-          ))}
-        </nav>
-
-        {/* Sidebar Footer (User Profile) */}
-        <div className="p-4 border-t border-emerald-800/50 flex-shrink-0">
-          <div className="flex items-center gap-3 px-2">
-            <div className="w-9 h-9 rounded-full bg-emerald-700 flex items-center justify-center text-white font-medium text-sm flex-shrink-0">
-              {CURRENT_USER.name.charAt(0)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">{CURRENT_USER.name}</p>
-              <p className="text-xs text-emerald-300/60 truncate">{CURRENT_USER.role}</p>
-            </div>
-            <button className="text-emerald-300/50 hover:text-white transition-colors flex-shrink-0">
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* === MAIN CONTENT AREA === */}
-      <main className="flex-1 flex flex-col min-h-screen lg:min-h-0 lg:h-screen overflow-hidden relative">
-        
-        {/* Top Header */}
-        <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-200 h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8 flex-shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Mobile Menu Button */}
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden text-slate-500 hover:text-slate-700 transition-colors p-1 flex-shrink-0"
-              aria-label="Toggle sidebar"
-            >
-              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-            
-            <div className="min-w-0">
-              <h2 className="text-base sm:text-lg lg:text-xl font-bold text-slate-900 tracking-tight truncate">System Notifications</h2>
-              <p className="text-xs text-slate-500 hidden sm:block truncate">Send and manage system-wide notifications to clients and technicians</p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-            <button 
-              onClick={() => setShowComposeForm(true)}
-              className="hidden sm:flex items-center gap-2 px-3 sm:px-4 py-2 bg-emerald-700 text-white text-sm font-medium rounded-lg hover:bg-emerald-800 transition-colors shadow-sm whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4 flex-shrink-0" />
-              <span className="hidden xs:inline">Compose Notification</span>
-              <span className="xs:hidden">Compose</span>
-            </button>
-            <button className="p-2 text-slate-400 hover:text-slate-600 bg-slate-100 rounded-lg transition-colors relative flex-shrink-0">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-            </button>
-          </div>
-        </header>
-
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+    <AdminLayout pageTitle="System Notifications">
+      <div className="p-4 sm:p-6 lg:p-8">
           
           {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
@@ -377,10 +233,9 @@ export default function SystemNotifications() {
           )}
 
         </div>
-      </main>
 
-      {/* Add global styles for skeleton loading */}
-      <style jsx>{`
+        {/* Add global styles for skeleton loading */}
+        <style jsx>{`
         @keyframes shimmer {
           0% {
             background-position: -200% 0;
@@ -426,6 +281,6 @@ export default function SystemNotifications() {
           }
         }
       `}</style>
-    </div>
+    </AdminLayout>
   );
 }
