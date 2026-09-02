@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import { sendInAppNotification } from '../services/notification.service.js';
+import { loginSchema, profileSchema, registrationSchema, validationError } from '../lib/inputSecurity.js';
 
 const resolveRoleFromUserId = async (userId) => {
   const checks = [
@@ -43,11 +44,9 @@ export const getRegistrationOptions = async (req, res, next) => {
 // POST /api/auth/login
 export const loginUser = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ success: false, error: 'Email and password are required.' });
-    }
+    const parsed = loginSchema.safeParse(req.body);
+    if (validationError(parsed, res, 'A valid email and password are required.')) return;
+    const { email, password } = parsed.data;
 
     const { data, error } = await supabaseAdmin.auth.signInWithPassword({ email, password });
 
@@ -92,19 +91,13 @@ export const registerClient = async (req, res, next) => {
   let userId = null;
   let filePath = null;
   try {
-    const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
-    const password = req.body.password;
-    const fullName = typeof req.body.fullName === 'string' ? req.body.fullName.trim() : '';
-    const contactNumber = typeof req.body.contactNumber === 'string' ? req.body.contactNumber.trim() : '';
-    const barangayId = Number.parseInt(req.body.barangayId, 10);
+    const parsed = registrationSchema.safeParse(req.body);
+    if (validationError(parsed, res, 'Registration could not be completed.')) return;
+    const { email, password, fullName, contactNumber, barangayId } = parsed.data;
     const govIdFile = req.file; // Provided via Multer middleware
 
-    if (!email || !password || !fullName || !/^09\d{9}$/.test(contactNumber) || !Number.isInteger(barangayId) || !govIdFile) {
+    if (!govIdFile) {
       return res.status(400).json({ success: false, error: 'All fields including Government ID are required.' });
-    }
-
-    if (fullName.length > 100 || email.length > 254 || typeof password !== 'string' || password.length < 8 || password.length > 128) {
-      return res.status(400).json({ success: false, error: 'Registration could not be completed.' });
     }
 
     if (!['image/png', 'image/jpeg', 'application/pdf'].includes(govIdFile.mimetype)) {
@@ -214,10 +207,9 @@ export const getMe = async (req, res, next) => {
 
 export const updateProfile = async (req, res, next) => {
   try {
-    const fullName = typeof req.body.fullName === 'string' ? req.body.fullName.trim() : '';
-    if (!fullName || fullName.length > 100) {
-      return res.status(400).json({ success: false, error: 'A valid name is required.' });
-    }
+    const parsed = profileSchema.safeParse(req.body);
+    if (validationError(parsed, res, 'A valid name is required.')) return;
+    const { fullName } = parsed.data;
 
     const { data: profile, error } = await supabaseAdmin
       .from('client_profiles')

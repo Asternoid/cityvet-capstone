@@ -135,7 +135,20 @@ function PortalPage({ portal, section }) {
   return <ErrorBoundary><div className="min-h-screen bg-off-white text-charcoal"><div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8"><Navbar title="CityVet" subtitle="Office of the City Veterinarian" user={user} onLogout={handleLogout} onProfileUpdated={(updatedUser) => updatedUser && setUser(updatedUser)} /><div className="mt-6 grid gap-6 lg:grid-cols-[220px_1fr]"><Sidebar items={portalConfig[portal].menu} activeItem={section} icons={portal === 'client' ? clientIcons : {}} onSelect={(item) => navigate(`/${portal}/${paths[item] || 'dashboard'}`)} /><main className="min-w-0">{view}</main></div></div></div></ErrorBoundary>;
 }
 
-function PublicPage({ page }) { const navigate = useNavigate(); const go = (name) => navigate(name === 'Register' ? '/register' : name === 'Login' ? '/login' : '/client/dashboard'); if (page === 'login') return <Login onNavigate={go} />; if (page === 'register') return <Register onNavigate={go} />; return <Landing onNavigate={go} />; }
+function PublicPage({ page }) {
+  const navigate = useNavigate();
+  const publicRoutes = {
+    Landing: '/',
+    Login: '/login',
+    Register: '/register',
+    Dashboard: '/client/dashboard',
+  };
+  const go = (name) => navigate(publicRoutes[name] || '/');
+
+  if (page === 'login') return <Login onNavigate={go} />;
+  if (page === 'register') return <Register onNavigate={go} />;
+  return <Landing onNavigate={go} />;
+}
 
 export default function AppRoutes() {
   const location = useLocation();

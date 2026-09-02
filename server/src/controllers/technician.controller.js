@@ -1,5 +1,6 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import { buildDailyQueue } from '../services/queueBuilder.service.js';
+import { leaveRequestSchema, sanitizeText, validationError } from '../lib/inputSecurity.js';
 
 // GET /api/technicians/queue/today
 export const getTodayQueue = async (req, res, next) => {
@@ -37,9 +38,12 @@ export const listMyLeaveRequests = async (req, res, next) => {
 // POST /api/technicians/leave
 export const createLeaveRequest = async (req, res, next) => {
   try {
-    const { startDate, endDate, reason } = req.body;
+    const parsed = leaveRequestSchema.safeParse(req.body);
+    if (validationError(parsed, res, 'Start date, end date, and reason are required.')) return;
+    const { startDate, endDate } = parsed.data;
+    const reason = sanitizeText(parsed.data.reason);
 
-    if (!startDate || !endDate || !reason?.trim()) {
+    if (!reason) {
       return res.status(400).json({ success: false, error: 'Start date, end date, and reason are required.' });
     }
 

@@ -1,6 +1,7 @@
 import { runAutoAssignment, validateBookingRequest, validateBlackoutDate } from '../services/autoAssignment.service.js';
 import { supabaseAdmin } from '../config/supabase.js';
 import { sendInAppNotification, sendEmailNotification } from '../services/notification.service.js';
+import { bookingSchema, sanitizeText, validationError } from '../lib/inputSecurity.js';
 
 const STATUS_LABELS = {
   pending_technician_confirmation: 'Pending Technician Confirmation',
@@ -68,15 +69,15 @@ export const getMyAppointment = async (req, res, next) => {
 // POST /api/appointments/submit
 export const submitBooking = async (req, res, next) => {
   try {
-    const { serviceId, preferredDate, preferredTime, animalDescription, concernRemarks } = req.body;
+    const parsed = bookingSchema.safeParse(req.body);
+    if (validationError(parsed, res, 'Please provide valid booking details.')) return;
+    const { serviceId, preferredDate, preferredTime } = parsed.data;
+    const animalDescription = sanitizeText(parsed.data.animalDescription);
+    const concernRemarks = sanitizeText(parsed.data.concernRemarks);
     const clientId = req.user.id;
 
-    if (!serviceId || !preferredDate || !preferredTime || !animalDescription) {
+    if (!animalDescription) {
       return res.status(400).json({ success: false, error: 'Please provide all booking details.' });
-    }
-
-    if (animalDescription.length > 200 || (concernRemarks && concernRemarks.length > 500)) {
-      return res.status(400).json({ success: false, error: 'Booking text exceeds the allowed length.' });
     }
 
     const { data: service, error: serviceError } = await supabaseAdmin
@@ -112,8 +113,8 @@ export const submitBooking = async (req, res, next) => {
       barangayId: clientProfile.barangay_id,
       preferredDate,
       preferredTime,
-      animalDescription: animalDescription.trim(),
-      remarks: concernRemarks?.trim() || null,
+      animalDescription,
+      remarks: concernRemarks || null,
     });
 
     // Notify Client

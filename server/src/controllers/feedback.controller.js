@@ -1,13 +1,17 @@
 import { supabaseAdmin } from '../config/supabase.js';
 import { analyzeFeedbackNLP } from '../services/nlp.service.js';
+import { feedbackSchema, sanitizeText, validationError } from '../lib/inputSecurity.js';
 
 // POST /api/feedback/submit
 export const submitFeedback = async (req, res, next) => {
   try {
-    const { appointmentId, feedbackText } = req.body;
+    const parsed = feedbackSchema.safeParse(req.body);
+    if (validationError(parsed, res, 'Appointment ID and feedback text are required.')) return;
+    const { appointmentId } = parsed.data;
+    const feedbackText = sanitizeText(parsed.data.feedbackText);
     const clientId = req.user.id;
 
-    if (!appointmentId || !feedbackText?.trim()) {
+    if (!feedbackText) {
       return res.status(400).json({
         success: false,
         error: 'Appointment ID and feedback text are required.'
@@ -78,7 +82,7 @@ export const submitFeedback = async (req, res, next) => {
         appointment_id: appointmentId,
         client_id: clientId,
         technician_id: apt.technician_id,
-        feedback_text: feedbackText.trim(),
+      feedback_text: feedbackText,
         sentiment,
         themes
       }])
